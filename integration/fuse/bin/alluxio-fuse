@@ -58,7 +58,10 @@ mount_fuse() {
   local mount_point=$1
   local alluxio_root=$2
   local mode=$3
-  (nohup "${JAVA}" -cp ${CLASSPATH} ${JAVA_OPTS} ${ALLUXIO_FUSE_JAVA_OPTS} \
+  (nohup \
+    QINIU_WRITER_HOSTS="192.168.213.50:29899,192.168.213.51:29899,192.168.213.52:29899" \
+    QINIU_READER_EX_HOSTS="192.168.213.50:29899,192.168.213.51:29899,192.168.213.52:29899" \
+    "${JAVA}" -cp ${CLASSPATH} ${JAVA_OPTS} ${ALLUXIO_FUSE_JAVA_OPTS} \
     alluxio.fuse.AlluxioFuse \
     -o big_writes \
     -o ${mode} \
