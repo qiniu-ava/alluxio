@@ -3110,7 +3110,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         AsyncPersistRequestEntry.newBuilder().setFileId(fileId).build();
     journalContext
         .append(JournalEntry.newBuilder().setAsyncPersistRequest(asyncPersistRequestEntry).build());
-
   }
 
   /**
@@ -3414,6 +3413,8 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         }
     }
     m.clear();
+    Metrics.FILES_PERSISTING.inc(filesToPersist.size() + DefaultBlockMaster.getEvictFileCnt(
+                DefaultBlockMaster.EVICT_PERSIST, IdUtils.INVALID_WORKER_ID) - Metrics.FILES_PERSISTING.getCount());
 
     // PERSIST -> FREE
     m = DefaultBlockMaster.getEvictFileMap(DefaultBlockMaster.EVICT_PERSIST, workerId);
@@ -3612,6 +3613,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     private static final Counter FILES_CREATED = MetricsSystem.masterCounter("FilesCreated");
     private static final Counter FILES_FREED = MetricsSystem.masterCounter("FilesFreed");
     private static final Counter FILES_PERSISTED = MetricsSystem.masterCounter("FilesPersisted");
+    private static final Counter FILES_PERSISTING = MetricsSystem.masterCounter("FilesPersisting");
     private static final Counter NEW_BLOCKS_GOT = MetricsSystem.masterCounter("NewBlocksGot");
     private static final Counter PATHS_DELETED = MetricsSystem.masterCounter("PathsDeleted");
     private static final Counter PATHS_MOUNTED = MetricsSystem.masterCounter("PathsMounted");
