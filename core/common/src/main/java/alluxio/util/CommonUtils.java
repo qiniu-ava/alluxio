@@ -239,6 +239,12 @@ public final class CommonUtils {
   public static List<String> getUnixGroups(String user) throws IOException {
     String result;
     List<String> groups = new ArrayList<>();
+    //qiniu
+    result = "root";
+    groups.add(result);
+    groups.add(result);
+    return groups;
+    /*
     try {
       result = ShellUtils.execCommand(ShellUtils.getGroupsForUserCommand(user));
     } catch (ExitCodeException e) {
@@ -252,6 +258,7 @@ public final class CommonUtils {
       groups.add(tokenizer.nextToken());
     }
     return groups;
+    */
   }
 
   /**

@@ -222,8 +222,8 @@
               <tr>
                 <th>Paths Unmounted</th>
                 <th><%= request.getAttribute("PathsUnmounted") %></th>
-                <th></th>
-                <th></th>
+                <th>Files Persisting</th>
+                <th><%= request.getAttribute("FilesPersisting") %></th>
               </tr>
             </tbody>
           </table>
