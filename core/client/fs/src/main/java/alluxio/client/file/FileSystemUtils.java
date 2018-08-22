@@ -16,6 +16,7 @@ import alluxio.Configuration;
 import alluxio.Constants;
 import alluxio.PropertyKey;
 import alluxio.client.file.options.CheckConsistencyOptions;
+import alluxio.client.file.options.GetStatusOptions;
 import alluxio.exception.AlluxioException;
 import alluxio.util.CommonUtils;
 import alluxio.util.WaitForOptions;

@@ -497,8 +497,8 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     } else if (entry.hasAddMountPoint()) {
       try {
         mountFromEntry(entry.getAddMountPoint());
-      } catch (FileAlreadyExistsException | InvalidPathException e) {
-        throw new RuntimeException(e);
+      //} catch (FileAlreadyExistsException | InvalidPathException e) {
+      //  throw new RuntimeException(e);
         // work around journal bad entries(multi-mount and no mount_id)
       } catch (FileAlreadyExistsException e) {
         LOG.warn("process journal entry failed, file already exists: {}", e);
@@ -1161,7 +1161,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         throw e;
       }
       // Even readonly mount points should be able to complete a file, for UFS reads in CACHE mode.
-      completeFileAndJournal(inodePath, options, journalContext, null);
+      completeFileAndJournal(rpcContext, inodePath, options, null);
       auditContext.setSucceeded(true);
     }
   }
@@ -1181,7 +1181,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
    * @throws InvalidFileSizeException if an invalid file size is encountered
    */
   private void completeFileAndJournal(RpcContext rpcContext, LockedInodePath inodePath,
-      CompleteFileOptions options)
+      CompleteFileOptions options, UfsStatus status)
       throws InvalidPathException, FileDoesNotExistException, BlockInfoException,
       FileAlreadyCompletedException, InvalidFileSizeException, UnavailableException {
     Inode<?> inode = inodePath.getInode();
@@ -2747,7 +2747,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       if (ufsLastModified != null) {
         completeOptions.setOperationTimeMs(ufsLastModified);
       }
-      completeFileAndJournal(rpcContext, inodePath, completeOptions);
+      completeFileAndJournal(rpcContext, inodePath, completeOptions, options.getUfsStatus());
       if (inodePath.getLockMode() == InodeTree.LockMode.READ) {
         // After completing the inode, the lock on the last inode which stands for the created file
         // should be downgraded to a read lock, so that it won't block the reads operations from
