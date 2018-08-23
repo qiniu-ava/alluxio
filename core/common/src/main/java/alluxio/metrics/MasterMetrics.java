@@ -23,6 +23,7 @@ public final class MasterMetrics {
   public static final String FILES_CREATED = "FilesCreated";
   public static final String FILES_FREED = "FilesFreed";
   public static final String FILES_PERSISTED = "FilesPersisted";
+  public static final String FILES_PERSISTING= "FilesPersisting";
   public static final String NEW_BLOCKS_GOT = "NewBlocksGot";
   public static final String PATHS_DELETED = "PathsDeleted";
   public static final String PATHS_MOUNTED = "PathsMounted";

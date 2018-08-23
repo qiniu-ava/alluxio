@@ -717,6 +717,8 @@ public class TieredBlockStore implements BlockStore {
 
     // 1. remove blocks to make room.
     for (Pair<Long, BlockStoreLocation> blockInfo : plan.toEvict()) {
+      // _qiniu
+      /*
       try {
         removeBlockInternal(Sessions.createInternalSessionId(),
             blockInfo.getFirst(), blockInfo.getSecond());
@@ -728,9 +730,16 @@ public class TieredBlockStore implements BlockStore {
         LOG.info("Failed to evict blockId {}, it could be already deleted", blockInfo.getFirst());
         continue;
       }
+      */
       synchronized (mBlockStoreEventListeners) {
+        try {
+            BlockMeta blockMeta = mMetaManager.getBlockMeta(blockInfo.getFirst());
+            LOG.debug(" ===== EVICT add block:" + blockMeta.getBlockId() + " file:" + blockMeta.getPath());
+        } catch (Exception e) {}
+
         for (BlockStoreEventListener listener : mBlockStoreEventListeners) {
-          listener.onRemoveBlockByWorker(sessionId, blockInfo.getFirst());
+          //listener.onRemoveBlockByWorker(sessionId, blockInfo.getFirst());
+          listener.onEvictBlockByWorker(sessionId, blockInfo.getFirst());
         }
       }
     }

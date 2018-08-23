@@ -16,6 +16,7 @@ import alluxio.Configuration;
 import alluxio.Constants;
 import alluxio.PropertyKey;
 import alluxio.client.file.options.CheckConsistencyOptions;
+import alluxio.client.file.options.GetStatusOptions;
 import alluxio.exception.AlluxioException;
 import alluxio.util.CommonUtils;
 import alluxio.util.WaitForOptions;
@@ -144,7 +145,7 @@ public final class FileSystemUtils {
       @Override
       public Boolean apply(Void input) {
         try {
-          return fs.getStatus(uri).isPersisted();
+          return fs.getStatus(uri, GetStatusOptions.defaults().invalidateCache(true)).isPersisted(); //qiniu
         } catch (Exception e) {
           Throwables.propagateIfPossible(e);
           throw new RuntimeException(e);
