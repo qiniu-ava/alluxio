@@ -135,7 +135,7 @@ public final class BlockReadHandler extends AbstractReadHandler<BlockReadRequest
       }
       BlockReadRequest request = context.getRequest();
       // TODO(calvin): Update the locking logic so this can be done better
-      if (request.isPromote()) {
+      if (request.isPromote() && request.isPersisted()) {       // qiniu only promote persist blocks
         try {
           mWorker.moveBlock(request.getSessionId(), request.getId(), mStorageTierAssoc.getAlias(0));
         } catch (BlockDoesNotExistException e) {

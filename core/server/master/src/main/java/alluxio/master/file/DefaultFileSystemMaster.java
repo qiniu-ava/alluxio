@@ -496,8 +496,11 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     } else if (entry.hasAddMountPoint()) {
       try {
         mountFromEntry(entry.getAddMountPoint());
-      } catch (FileAlreadyExistsException | InvalidPathException e) {
-        throw new RuntimeException(e);
+        // work around journal bad entries(multi-mount and no mount_id)
+      } catch (FileAlreadyExistsException e) {
+        LOG.warn("process journal entry failed, file already exists: {}", e);
+      } catch (InvalidPathException e) {
+        LOG.warn("process journal entry failed, invalid path exception: {}", e);
       }
     } else if (entry.hasDeleteMountPoint()) {
       unmountFromEntry(entry.getDeleteMountPoint());
