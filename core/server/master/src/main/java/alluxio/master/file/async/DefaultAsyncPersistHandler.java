@@ -31,9 +31,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +94,8 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
   private long getWorkerStoringFile(AlluxioURI path)
       throws FileDoesNotExistException, AccessControlException, UnavailableException {
     long fileId = mFileSystemMasterView.getFileId(path);
+    //qiniu: initialize the return workerId
+    long workerId=0l;
     try {
       if (mFileSystemMasterView.getFileInfo(fileId).getLength() == 0) {
         // if file is empty, return any worker
@@ -109,6 +113,11 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
     }
 
     Map<Long, Integer> workerBlockCounts = new HashMap<>();
+    //qiniu: workerAddress:blocks
+    Map<String,Integer> workerAddressCounts=new HashMap<>();
+     //qiniu: workerId:workerAddress
+    Map<Long,String> workerIdAddress=new HashMap<>();
+
     List<FileBlockInfo> blockInfoList;
     try {
       blockInfoList = mFileSystemMasterView.getFileBlockInfoList(path);
@@ -121,11 +130,20 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
           } else {
             workerBlockCounts.put(blockLocation.getWorkerId(), 1);
           }
+          //qiniu:get the the blocks of every WorkerAddress
+          if (workerAddressCounts.containsKey(blockLocation.getWorkerAddress().toString())) {
+              workerAddressCounts.put(blockLocation.getWorkerAddress().toString(),
+              workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) + 1);
+          } else {
+              workerAddressCounts.put(blockLocation.getWorkerAddress().toString(), 1);
+          }
 
           // all the blocks of a file must be stored on the same worker
           if (workerBlockCounts.get(blockLocation.getWorkerId()) == blockInfoList.size()) {
             return blockLocation.getWorkerId();
           }
+          //qiniu:get the map workerId:workerAddress
+          workerIdAddress.put(blockLocation.getWorkerId(),blockLocation.getWorkerAddress().toString());        
         }
       }
     } catch (FileDoesNotExistException e) {
@@ -144,10 +162,34 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
     }
 
     // qiniu PMW get worker with most blocks
-    Map<Long, Integer> workers = new LinkedHashMap<>();
-    workerBlockCounts.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-        .forEachOrdered(x -> workers.put(x.getKey(), x.getValue()));
-    return workers.keySet().iterator().next();
+    Map<String,Integer> worker = new LinkedHashMap<>();
+    List<String> list=new ArrayList<String>();
+    //qiniu :sort the map of  workerAddressCounts and put it into map worker
+    workerAddressCounts.entrySet().stream().sorted(Map.Entry.<String,Integer>comparingByValue().reversed()).
+    forEachOrdered(x -> worker.put(x.getKey(), x.getValue()));
+    //qiniu: blockNum is the max value of blocks
+    int blockNum=worker.entrySet().iterator().next().getValue(); 
+    //qiniu: get the workerAddress of the max blocks
+    Iterator iter=workerAddressCounts.entrySet().iterator();
+    while(iter.hasNext()){
+            Map.Entry item=(Map.Entry)iter.next();
+            if((Integer)item.getValue()==blockNum){
+              //qiniu:put the workerAddress into the list
+              list.add((String)item.getKey());
+            }
+    }
+    //qiniu:sort the workerAddress and find the max workerAddress
+    Collections.sort(list);
+    String maxAddress=list.get(list.size()-1);
+    //qiniu:find the workerId  corresponding to the the max workerAddress
+    Iterator iter2=workerIdAddress.entrySet().iterator();
+    while(iter2.hasNext()){
+            Map.Entry item=(Map.Entry)iter2.next();
+            if((String)item.getValue()==maxAddress){
+                   workerId=(long)item.getKey();
+            }
+    } 
+   return workerId;
 
     //LOG.error("Not all the blocks of file {} stored on the same worker", path);
     //return IdUtils.INVALID_WORKER_ID;
