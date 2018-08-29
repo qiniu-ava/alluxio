@@ -14,6 +14,7 @@ package alluxio.client.block;
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
 import alluxio.client.block.options.GetWorkerReportOptions;
+import alluxio.MetaCache;
 import alluxio.master.MasterClientConfig;
 import alluxio.thrift.AlluxioService;
 import alluxio.thrift.BlockMasterClientService;
@@ -77,12 +78,18 @@ public final class RetryHandlingBlockMasterClient extends AbstractMasterClient
 
   @Override
   public synchronized List<WorkerInfo> getWorkerInfoList() throws IOException {
+    //qiniu
+    List<WorkerInfo> cached = MetaCache.getWorkerInfoList();
+    if (cached != null && cached.size() > 0) return cached;
+
     return retryRPC(() -> {
       List<WorkerInfo> result = new ArrayList<>();
       for (alluxio.thrift.WorkerInfo workerInfo : mClient
           .getWorkerInfoList(new GetWorkerInfoListTOptions()).getWorkerInfoList()) {
         result.add(WorkerInfo.fromThrift(workerInfo));
       }
+      //qiniu
+      if (result != null) MetaCache.setWorkerInfoList(result);
       return result;
     });
   }

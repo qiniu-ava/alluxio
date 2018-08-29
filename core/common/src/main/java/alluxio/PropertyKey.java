@@ -825,6 +825,12 @@ public final class PropertyKey implements Comparable<PropertyKey> {
       .setScope(Scope.SERVER)
       .setDisplayType(DisplayType.CREDENTIALS)
       .build();
+  public static final PropertyKey OSS_USER_ID = new Builder(Name.OSS_USER_ID)
+      .setDescription("The user id of OSS bucket.")
+      .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+      .setScope(Scope.SERVER)
+      .setDisplayType(DisplayType.CREDENTIALS)
+      .build();
   public static final PropertyKey S3A_ACCESS_KEY = new Builder(Name.S3A_ACCESS_KEY)
       .setDescription("The access key of S3 bucket.")
       .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
@@ -3169,6 +3175,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String OSS_ACCESS_KEY = "fs.oss.accessKeyId";
     public static final String OSS_ENDPOINT_KEY = "fs.oss.endpoint";
     public static final String OSS_SECRET_KEY = "fs.oss.accessKeySecret";
+    public static final String OSS_USER_ID = "fs.oss.userId";
     public static final String S3A_ACCESS_KEY = "aws.accessKeyId";
     public static final String S3A_SECRET_KEY = "aws.secretKey";
     public static final String SWIFT_API_KEY = "fs.swift.apikey";
