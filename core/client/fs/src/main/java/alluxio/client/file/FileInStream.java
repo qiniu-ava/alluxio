@@ -163,11 +163,11 @@ public class FileInStream extends InputStream implements BoundedStream, Position
         }
         retry.reset();
       } catch (UnavailableException | ConnectException | DeadlineExceededException e) {
+        handleRetryableException(mBlockInStream, e);
+        mBlockInStream = null;
         if (!retry.attemptRetry()) {
           throw e;
         }
-        handleRetryableException(mBlockInStream, e);
-        mBlockInStream = null;
       }
     }
     return len - bytesLeft;
