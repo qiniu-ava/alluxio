@@ -70,7 +70,6 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
       throws AlluxioException, UnavailableException {
     // find the worker
     long workerId = getWorkerStoringFile(path);
-
     if (workerId == IdUtils.INVALID_WORKER_ID) {
       LOG.error("No worker found to schedule async persistence for file " + path);
       return;
@@ -94,8 +93,6 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
   private long getWorkerStoringFile(AlluxioURI path)
       throws FileDoesNotExistException, AccessControlException, UnavailableException {
     long fileId = mFileSystemMasterView.getFileId(path);
-    //qiniu: initialize the return workerId
-    long workerId=0l;
     try {
       if (mFileSystemMasterView.getFileInfo(fileId).getLength() == 0) {
         // if file is empty, return any worker
@@ -111,12 +108,12 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
     } catch (UnavailableException e) {
       return IdUtils.INVALID_WORKER_ID;
     }
-
-    Map<Long, Integer> workerBlockCounts = new HashMap<>();
-    //qiniu: workerAddress:blocks
-    Map<String,Integer> workerAddressCounts=new HashMap<>();
-     //qiniu: workerId:workerAddress
-    Map<Long,String> workerIdAddress=new HashMap<>();
+  /*
+  qiniu:   get the first HashMap of workerAddress and blocks---workerAddressCounts
+           get the secondary HashMap of workerAddress and workerId---workerAddressId
+  */
+    Map<String,Integer> workerAddressCounts = new HashMap<>();
+    Map<String,Long> workerAddressId = new HashMap<>();
 
     List<FileBlockInfo> blockInfoList;
     try {
@@ -124,26 +121,16 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
 
       for (FileBlockInfo fileBlockInfo : blockInfoList) {
         for (BlockLocation blockLocation : fileBlockInfo.getBlockInfo().getLocations()) {
-          if (workerBlockCounts.containsKey(blockLocation.getWorkerId())) {
-            workerBlockCounts.put(blockLocation.getWorkerId(),
-                workerBlockCounts.get(blockLocation.getWorkerId()) + 1);
-          } else {
-            workerBlockCounts.put(blockLocation.getWorkerId(), 1);
-          }
-          //qiniu:get the the blocks of every WorkerAddress
           if (workerAddressCounts.containsKey(blockLocation.getWorkerAddress().toString())) {
-              workerAddressCounts.put(blockLocation.getWorkerAddress().toString(),
-              workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) + 1);
+            workerAddressCounts.put(blockLocation.getWorkerAddress().toString(),
+            workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) + 1);
           } else {
-              workerAddressCounts.put(blockLocation.getWorkerAddress().toString(), 1);
+            workerAddressCounts.put(blockLocation.getWorkerAddress().toString(), 1);
           }
-
-          // all the blocks of a file must be stored on the same worker
-          if (workerBlockCounts.get(blockLocation.getWorkerId()) == blockInfoList.size()) {
+          workerAddressId.put(blockLocation.getWorkerAddress().toString(),blockLocation.getWorkerId());
+          if (workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) == blockInfoList.size()) {
             return blockLocation.getWorkerId();
           }
-          //qiniu:get the map workerId:workerAddress
-          workerIdAddress.put(blockLocation.getWorkerId(),blockLocation.getWorkerAddress().toString());        
         }
       }
     } catch (FileDoesNotExistException e) {
@@ -155,44 +142,26 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
     } catch (UnavailableException e) {
       return IdUtils.INVALID_WORKER_ID;
     }
-
-    if (workerBlockCounts.size() == 0) {
+    if (workerAddressCounts.size() == 0) {
       LOG.error("The file " + path + " does not exist on any worker");
       return IdUtils.INVALID_WORKER_ID;
     }
 
-    // qiniu PMW get worker with most blocks
+    //qiniu: get the worker with most blocks.
     Map<String,Integer> worker = new LinkedHashMap<>();
-    List<String> list=new ArrayList<String>();
-    //qiniu :sort the map of  workerAddressCounts and put it into map worker
-    workerAddressCounts.entrySet().stream().sorted(Map.Entry.<String,Integer>comparingByValue().reversed()).
-    forEachOrdered(x -> worker.put(x.getKey(), x.getValue()));
-    //qiniu: blockNum is the max value of blocks
-    int blockNum=worker.entrySet().iterator().next().getValue(); 
-    //qiniu: get the workerAddress of the max blocks
-    Iterator iter=workerAddressCounts.entrySet().iterator();
-    while(iter.hasNext()){
-            Map.Entry item=(Map.Entry)iter.next();
-            if((Integer)item.getValue()==blockNum){
-              //qiniu:put the workerAddress into the list
-              list.add((String)item.getKey());
-            }
+    List<String> list = new ArrayList<String>();
+    workerAddressCounts.entrySet().stream().sorted(Map.Entry.<String,Integer>comparingByValue().reversed())
+      .forEachOrdered(x -> worker.put(x.getKey(), x.getValue()));
+    int blockNum = worker.entrySet().iterator().next().getValue();
+    for(Map.Entry<String,Integer> entry : worker.entrySet()){
+      if(entry.getValue() != blockNum){
+        break;
+      }
+      list.add(entry.getKey());
     }
-    //qiniu:sort the workerAddress and find the max workerAddress
     Collections.sort(list);
-    String maxAddress=list.get(list.size()-1);
-    //qiniu:find the workerId  corresponding to the the max workerAddress
-    Iterator iter2=workerIdAddress.entrySet().iterator();
-    while(iter2.hasNext()){
-            Map.Entry item=(Map.Entry)iter2.next();
-            if((String)item.getValue()==maxAddress){
-                   workerId=(long)item.getKey();
-            }
-    } 
-   return workerId;
-
-    //LOG.error("Not all the blocks of file {} stored on the same worker", path);
-    //return IdUtils.INVALID_WORKER_ID;
+    String uniqueAddress = list.get((int)fileId % list.size());
+    return workerAddressId.get(uniqueAddress);
   }
 
   /**
