@@ -246,7 +246,7 @@ public interface FileSystemMaster extends Master {
    * @throws AccessControlException if permission checking fails
    * @throws InvalidPathException if the path is invalid
    */
-  void delete(AlluxioURI path, DeleteOptions options)
+  boolean delete(AlluxioURI path, DeleteOptions options)
       throws IOException, FileDoesNotExistException, DirectoryNotEmptyException,
       InvalidPathException, AccessControlException;
 

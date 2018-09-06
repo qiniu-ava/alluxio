@@ -14,6 +14,7 @@ package alluxio.master.file;
 import alluxio.AlluxioURI;
 import alluxio.Configuration;
 import alluxio.Constants;
+import alluxio.MetaCache;
 import alluxio.PropertyKey;
 import alluxio.Server;
 import alluxio.clock.SystemClock;
@@ -145,7 +146,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.google.common.io.Closer;
+
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.thrift.TProcessor;
 import org.slf4j.Logger;
@@ -316,6 +319,15 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
   /** This manages the file system inode structure. This must be journaled. */
   private final InodeTree mInodeTree;
 
+  private final long INODE_CAPACITY = Configuration.getLong(PropertyKey.MASTER_INODE_CAPACITY);
+  private final long INODE_CAPACITY_EVICT = INODE_CAPACITY / 100
+        * Configuration.getLong(PropertyKey.MASTER_INODE_EVICT_RATIO);
+  private final long INODE_CAPACITY_DELETE = INODE_CAPACITY / 100
+        * Configuration.getLong(PropertyKey.MASTER_INODE_PERSIST_DELETE_RATIO);
+
+  private static final int MAX_PATHS =
+      Configuration.getInt(PropertyKey.MASTER_UFS_PATH_CACHE_CAPACITY);
+
   /** This manages the file system mount points. */
   private final MountTable mMountTable;
 
@@ -380,7 +392,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
    */
   DefaultFileSystemMaster(BlockMaster blockMaster, MasterContext masterContext) {
     this(blockMaster, masterContext, ExecutorServiceFactories
-        .fixedThreadPoolExecutorServiceFactory(Constants.FILE_SYSTEM_MASTER_NAME, 4));
+        .fixedThreadPoolExecutorServiceFactory(Constants.FILE_SYSTEM_MASTER_NAME, 5)); // 4->5
   }
 
   /**
@@ -619,6 +631,11 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
           new HeartbeatThread(HeartbeatContext.MASTER_LOST_FILES_DETECTION,
               new LostFileDetector(this, mInodeTree),
               (int) Configuration.getMs(PropertyKey.MASTER_WORKER_HEARTBEAT_INTERVAL)));
+      getExecutorService().submit(
+          new HeartbeatThread(HeartbeatContext.MASTER_ASYNC_INODE_EVICT,
+              new AsyncInodeFileEvictor(this, mInodeTree, INODE_CAPACITY, INODE_CAPACITY_EVICT),
+              //(int) Configuration.getMs(PropertyKey.MASTER_WORKER_HEARTBEAT_INTERVAL)));
+              (int) 2000)); 
       if (Configuration.getBoolean(PropertyKey.MASTER_STARTUP_CONSISTENCY_CHECK_ENABLED)) {
         mStartupConsistencyCheck = getExecutorService().submit(() -> startupCheckConsistency(
             ExecutorServiceFactories
@@ -823,6 +840,11 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         auditContext.setAllowed(false);
         throw e;
       }
+      /*
+      if (!inodePath.fullPathExists() && inodePath.getLastExistingInode().isFile()) {
+        lockingScheme.setShouldSync(true);
+      }
+      */
       // Possible ufs sync.
       if (syncMetadata(rpcContext, inodePath, lockingScheme, DescendantType.ONE)) {
         // If synced, do not load metadata.
@@ -839,6 +861,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       }
       FileInfo fileInfo = getFileInfoInternal(inodePath);
       auditContext.setSrcInode(inodePath.getInode()).setSucceeded(true);
+
       return fileInfo;
     }
   }
@@ -863,6 +886,9 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         throw new FileDoesNotExistException(e.getMessage(), e);
       }
     }
+
+    inode.setLastAccessTs(System.currentTimeMillis());
+
     MountTable.Resolution resolution;
     try {
       resolution = mMountTable.resolve(uri);
@@ -1013,6 +1039,12 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
             InodeTree.LockMode.READ, child, childComponents)) {
           listStatusInternal(childInodePath, auditContext,
               nextDescendantType, statusList);
+        } catch (InvalidPathException e) {
+          if (e.getMessage().indexOf(ExceptionMessage.PATH_INVALID_CONCURRENT_DELETE.getMessage()) >= 0) {
+            LOG.info("=== evict possible concurrent delete, ignore");
+          } else {
+            throw e;
+          }
         }
       }
     }
@@ -1483,11 +1515,12 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
   }
 
   @Override
-  public void delete(AlluxioURI path, DeleteOptions options) throws IOException,
+  public boolean delete(AlluxioURI path, DeleteOptions options) throws IOException,
       FileDoesNotExistException, DirectoryNotEmptyException, InvalidPathException,
       AccessControlException {
     List<Inode<?>> deletedInodes;
     Metrics.DELETE_PATHS_OPS.inc();
+    boolean persistBeforDelete = false;
     LockingScheme lockingScheme =
         createLockingScheme(path, options.getCommonOptions(), InodeTree.LockMode.WRITE);
     try (RpcContext rpcContext = createRpcContext();
@@ -1527,9 +1560,38 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         throw new FileDoesNotExistException(ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(path));
       }
 
-      deleteAndJournal(rpcContext, inodePath, options);
+      //qiniu - allow next ls to list file deleted with -alluxioOnly
+      if (options.isAlluxioOnly() && (!options.isCheckPersisted() || inodePath.getInode().isPersisted())) {
+        InodeDirectory parentDir = inodePath.getParentInodeDirectory();
+        //TODO: check is root?
+        //TODO: don't have to lockWrite()? lockWrite may cause dead lock
+        if (parentDir.isDirectChildrenLoaded()) {
+          parentDir.setDirectChildrenLoaded(false);
+          parentDir.removeChild(inodePath.getInode());
+          rpcContext.getJournalContext().append(parentDir.toJournalEntry());
+          LOG.info("=== set off parent direct children load {}", path.getPath());
+        }
+      }
+
+      if (options.isCheckPersisted() && !inodePath.getInode().isPersisted()) {
+        persistBeforDelete = true;
+      } else {
+        deleteAndJournal(rpcContext, inodePath, options);
+      }
       auditContext.setSucceeded(true);
     }
+
+    if (persistBeforDelete) {
+      LOG.info("=== evict schedule async persist {}", path.getPath());
+      try {
+        mAsyncPersistHandler.scheduleAsyncPersistence(path);
+      } catch (AlluxioException | UnavailableException e) {
+        LOG.error("=== evict schedule async persist err: {}", e.getMessage());
+      }
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -3217,17 +3279,10 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     journalSetAttribute(inodePath, opTimeMs, options, rpcContext.getJournalContext());
   }
 
-  /**
-   * @param inodePath the file path to use
-   * @param opTimeMs the operation time (in milliseconds)
-   * @param options the method options
-   * @param journalContext the journal context
-   * @throws FileDoesNotExistException if path does not exist
-   */
-  private void journalSetAttribute(LockedInodePath inodePath, long opTimeMs,
+  private void journalSetAttribute(Inode inode, long opTimeMs,
       SetAttributeOptions options, JournalContext journalContext) throws FileDoesNotExistException {
     SetAttributeEntry.Builder builder =
-        SetAttributeEntry.newBuilder().setId(inodePath.getInode().getId()).setOpTimeMs(opTimeMs);
+        SetAttributeEntry.newBuilder().setId(inode.getId()).setOpTimeMs(opTimeMs);
     if (options.getPinned() != null) {
       builder.setPinned(options.getPinned());
     }
@@ -3252,6 +3307,18 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       builder.setUfsFingerprint(options.getUfsFingerprint());
     }
     journalContext.append(JournalEntry.newBuilder().setSetAttribute(builder).build());
+  }
+
+  /**
+   * @param inodePath the file path to use
+   * @param opTimeMs the operation time (in milliseconds)
+   * @param options the method options
+   * @param journalContext the journal context
+   * @throws FileDoesNotExistException if path does not exist
+   */
+  private void journalSetAttribute(LockedInodePath inodePath, long opTimeMs,
+      SetAttributeOptions options, JournalContext journalContext) throws FileDoesNotExistException {
+    journalSetAttribute(inodePath.getInode(), opTimeMs, options, journalContext);
   }
 
   @Override
@@ -3560,10 +3627,38 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
           Constants.INVALID_UFS_FINGERPRINT;
       try {
         // Permission checking for each file is performed inside setAttribute
-        setAttribute(getPath(fileId),
-            SetAttributeOptions.defaults().setPersisted(true).setUfsFingerprint(ufsFingerprint));
+        AlluxioURI uri = getPath(fileId);
+        //setAttribute(uri,
+        //    SetAttributeOptions.defaults().setPersisted(true).setUfsFingerprint(ufsFingerprint));
+        /*
+        AlluxioURI parentUri = uri.getParent();
+        boolean isChildrenLoaded = false;
+        try (LockedInodePath inodePath = mInodeTree
+            .lockFullInodePath(parentUri, InodeTree.LockMode.READ)) {
+          InodeDirectory dir = (InodeDirectory)inodePath.getInode();
+          isChildrenLoaded = dir.isDirectChildrenLoaded();
+          if (isChildrenLoaded) {
+            dir.setDirectChildrenLoaded(false);
+          }
+        }
+        if (isChildrenLoaded) {  // dummy, force journal
+          setAttribute(parentUri, SetAttributeOptions.defaults() 
+              .setUfsFingerprint(Constants.INVALID_UFS_FINGERPRINT));
+          LOG.info("=== set children not loaded for {}", parentUri.getPath());
+        }
+        */
+        if (mInodeTree.getSize() > INODE_CAPACITY_DELETE) {
+          delete(uri, DeleteOptions.defaults().setAlluxioOnly(true));
+          LOG.debug("=== evict async delete {}:{}", fileId, uri.getPath());
+        } else {
+          setAttribute(uri,
+              SetAttributeOptions.defaults().setPersisted(true).setUfsFingerprint(ufsFingerprint));
+          LOG.debug("=== evict async set persisted {}:{}", fileId, uri.getPath());
+        }
       } catch (FileDoesNotExistException | AccessControlException | InvalidPathException e) {
         LOG.error("Failed to set file {} as persisted, because {}", fileId, e);
+      } catch (IOException | DirectoryNotEmptyException e) {
+        LOG.error(" === Failed to async delete file {} , because {}", fileId, e);
       }
     }
 
@@ -3574,35 +3669,12 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     // EVICT -> PERSIST or FREE
     Map<Long, PersistFile> m = DefaultBlockMaster.getEvictFileMap(DefaultBlockMaster.EVICT_EVICT, workerId);
     Iterator<Map.Entry<Long, PersistFile>> it = m.entrySet().iterator();
-    PersistFile pf = null;
-    FileInfo info = null;
     while (it.hasNext()) {
-        pf = it.next().getValue();
+        PersistFile pf = it.next().getValue();
         try {
-            info = getFileInfo(pf.getFileId());
-
-            if (info.isPersisted()) {
-                DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_FREE, workerId,  // ready for free
-                        new PersistFile(info.getFileId(), getBlocks4Worker(info, workerId)));
-                continue;
-            } 
-
-            if (!info.getBlockIds().containsAll(pf.getBlockIds())) {
-                LOG.error("=== block {} not in file {}, bs {}", pf.getBlockIds(), info.getPath(), info.getFileBlockInfos());
-                pf.getBlockIds().removeAll(info.getBlockIds());
-                DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_FREE, workerId, pf); 
-                continue;
-            }
-
             // don't go thru journal
-            mAsyncPersistHandler.scheduleAsyncPersistence(new AlluxioURI(info.getPath()));
-
-            if (DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_PERSIST, workerId,  // ready for persist 
-                        new PersistFile(info.getFileId(), new ArrayList<Long>(info.getBlockIds())))) {
-                //filesToPersist.add(new PersistFile(info.getFileId(), info.getBlockIds()));
-                LOG.debug("===== EVICT[PERSIST] worker:" + workerId + " file:" + info.getPath()
-                        + "(" + info.getFileId() + ")" + " blocks:" + info.getBlockIds());
-            }
+            mAsyncPersistHandler.scheduleAsyncPersistence(new AlluxioURI(
+                  getFileInfo(it.next().getValue().getFileId()).getPath()));
         } catch (FileDoesNotExistException e) {
             DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_FREE, workerId, pf);
             LOG.error("==== EVICT: block {} for {} not found; do free: {}", pf.getBlockIds(), pf.getFileId(), e.getMessage());
@@ -3616,23 +3688,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     m.clear();
     Metrics.FILES_PERSISTING.inc(filesToPersist.size() + DefaultBlockMaster.getEvictFileCnt(
                 DefaultBlockMaster.EVICT_PERSIST, IdUtils.INVALID_WORKER_ID) - Metrics.FILES_PERSISTING.getCount());
-
-    // PERSIST -> FREE
-    m = DefaultBlockMaster.getEvictFileMap(DefaultBlockMaster.EVICT_PERSIST, workerId);
-    it = m.entrySet().iterator();
-    while (it.hasNext()) {
-        info = null;
-        try {
-            info = getFileInfo(it.next().getValue().getFileId());
-            if (info.isPersisted()) {
-                DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_FREE, workerId,  // ready for free
-                        new PersistFile(info.getFileId(), getBlocks4Worker(info, workerId)));
-            }
-        } catch (Exception e) {
-            LOG.error("==== EVICT[FREE ERROR]:" + e.getMessage());   // complain and ignore the file
-        }
-        if (info == null || info.isPersisted()) it.remove(); // file gone or already persisted
-    }
 
     if (!filesToPersist.isEmpty()) {
       LOG.debug("Sent files {} to worker {} to persist", filesToPersist, workerId);

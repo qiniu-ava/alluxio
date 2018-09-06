@@ -266,6 +266,7 @@ public final class InodeFile extends Inode<InodeFile> {
     // If journal entry has no mode set, set default mode for backwards-compatibility.
     short mode = entry.hasMode() ? (short) entry.getMode() : Constants.DEFAULT_FILE_SYSTEM_MODE;
     return new InodeFile(BlockId.getContainerId(entry.getId()))
+        .setLastAccessTs(System.currentTimeMillis())
         .setName(entry.getName())
         .setBlockIds(entry.getBlocksList())
         .setBlockSizeBytes(entry.getBlockSizeBytes())
@@ -299,6 +300,7 @@ public final class InodeFile extends Inode<InodeFile> {
   public static InodeFile create(long blockContainerId, long parentId, String name,
       long creationTimeMs, CreateFileOptions options) {
     return new InodeFile(blockContainerId)
+        .setLastAccessTs(System.currentTimeMillis())
         .setBlockSizeBytes(options.getBlockSizeBytes())
         .setCreationTimeMs(creationTimeMs)
         .setName(name)

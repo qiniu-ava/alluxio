@@ -22,7 +22,7 @@ import javax.annotation.concurrent.ThreadSafe;
 public final class LockingScheme {
   private final AlluxioURI mPath;
   private final InodeTree.LockMode mDesiredLockMode;
-  private final boolean mShouldSync;
+  private boolean mShouldSync;
 
   /**
    * Constructs a {@link LockingScheme}.
@@ -67,5 +67,9 @@ public final class LockingScheme {
    */
   public boolean shouldSync() {
     return mShouldSync;
+  }
+
+  public void setShouldSync(boolean sync) {
+    mShouldSync = sync;
   }
 }

@@ -46,6 +46,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
   private long mParentId;
   private PersistenceState mPersistenceState;
   private boolean mPinned;
+  private long mLastAccessTs;
 
   private String mOwner;
   private String mGroup;
@@ -72,6 +73,15 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
     mOwner = "";
     mUfsFingerprint = Constants.INVALID_UFS_FINGERPRINT;
     mLock = new ReentrantReadWriteLock();
+  }
+
+  public T setLastAccessTs(long ts) {
+    mLastAccessTs = ts;
+    return getThis();
+  }
+
+  public long getLastAccessTs() {
+    return mLastAccessTs;
   }
 
   /**

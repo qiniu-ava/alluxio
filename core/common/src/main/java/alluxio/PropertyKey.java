@@ -1317,6 +1317,42 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey MASTER_INODE_CAPACITY =
+      new Builder(Name.MASTER_INODE_CAPACITY)
+          .setDefaultValue(20000000)
+          .setDescription("The capacity of managable master inode.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey MASTER_INODE_EVICT_RATIO =
+      new Builder(Name.MASTER_INODE_EVICT_RATIO)
+          .setDefaultValue(80)
+          .setDescription("The safe ratio of inode capacity.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey MASTER_INODE_EVICT_BASE =
+      new Builder(Name.MASTER_INODE_EVICT_BASE)
+          .setDefaultValue(10000)
+          .setDescription("The number of inode to evict in one pass.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey MASTER_INODE_PERSIST_DELETE_RATIO =
+      new Builder(Name.MASTER_INODE_PERSIST_DELETE_RATIO)
+          .setDefaultValue(50)
+          .setDescription("The ratio of inode to delete  async persisted file.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey MASTER_INODE_CHECKPOINT_INTERVAL_MS =
+      new Builder(Name.MASTER_INODE_CHECKPOINT_INTERVAL_MS)
+          .setAlias(new String[]{"alluxio.master.inode.checkpoint.interval.ms"})
+          .setDefaultValue("1hour")
+          .setDescription("Time interval to periodically dump inode heat")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
   public static final PropertyKey MASTER_UFS_PATH_CACHE_THREADS =
       new Builder(Name.MASTER_UFS_PATH_CACHE_THREADS)
           .setDefaultValue(64)
@@ -3272,6 +3308,16 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.master.ufs.block.location.cache.capacity";
     public static final String MASTER_UFS_PATH_CACHE_CAPACITY =
         "alluxio.master.ufs.path.cache.capacity";
+    public static final String MASTER_INODE_CAPACITY =
+        "alluxio.master.inode.capacity";
+    public static final String MASTER_INODE_EVICT_RATIO =
+        "alluxio.master.inode.evict.ratio";
+    public static final String MASTER_INODE_EVICT_BASE =
+        "alluxio.master.inode.evict.base";
+    public static final String MASTER_INODE_PERSIST_DELETE_RATIO =
+        "alluxio.master.inode.persist.delete.ratio";
+    public static final String MASTER_INODE_CHECKPOINT_INTERVAL_MS =
+        "alluxio.master.inode.checkpoint.interval";
     public static final String MASTER_UFS_PATH_CACHE_THREADS =
         "alluxio.master.ufs.path.cache.threads";
     public static final String MASTER_WEB_BIND_HOST = "alluxio.master.web.bind.host";

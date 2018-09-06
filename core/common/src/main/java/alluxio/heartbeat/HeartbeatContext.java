@@ -36,6 +36,7 @@ public final class HeartbeatContext {
   public static final String MASTER_LOG_CONFIG_REPORT_SCHEDULING
       = "Master Log Config Report Scheduling";
   public static final String MASTER_LOST_FILES_DETECTION = "Master Lost Files Detection";
+  public static final String MASTER_ASYNC_INODE_EVICT = "Master Async Evict Inode";
   public static final String MASTER_LOST_MASTER_DETECTION = "Master Lost Master Detection";
   public static final String MASTER_LOST_WORKER_DETECTION = "Master Lost Worker Detection";
   public static final String MASTER_METRICS_SYNC = "Master Metrics Sync";
@@ -55,6 +56,7 @@ public final class HeartbeatContext {
     sTimerClasses.put(MASTER_FILE_RECOMPUTATION, SLEEPING_TIMER_CLASS);
     sTimerClasses.put(MASTER_LOG_CONFIG_REPORT_SCHEDULING, SLEEPING_TIMER_CLASS);
     sTimerClasses.put(MASTER_LOST_FILES_DETECTION, SLEEPING_TIMER_CLASS);
+    sTimerClasses.put(MASTER_ASYNC_INODE_EVICT, SLEEPING_TIMER_CLASS);
     sTimerClasses.put(MASTER_LOST_MASTER_DETECTION, SLEEPING_TIMER_CLASS);
     sTimerClasses.put(MASTER_LOST_WORKER_DETECTION, SLEEPING_TIMER_CLASS);
     sTimerClasses.put(MASTER_TTL_CHECK, SLEEPING_TIMER_CLASS);

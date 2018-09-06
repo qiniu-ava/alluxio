@@ -161,8 +161,6 @@ case $1 in
       exit $?
     fi
     if [[ ${#args[@]} -eq 3 ]]; then
-      local a
-      local b
       a=${args[1]}
       b=${args[2]}
       shift
