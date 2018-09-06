@@ -109,13 +109,12 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
     } catch (UnavailableException e) {
       return IdUtils.INVALID_WORKER_ID;
     }
-
   /*
   qiniu:   get the first HashMap of workerAddress and blocks---workerAddressCounts
            get the secondary HashMap of workerAddress and workerId---workerAddressId
   */
-    Map<String,Integer> workerAddressCounts=new HashMap<>();
-    Map<String,Long> workerAddressId=new HashMap<>();
+    Map<String,Integer> workerAddressCounts = new HashMap<>();
+    Map<String,Long> workerAddressId = new HashMap<>();
 
     List<FileBlockInfo> blockInfoList;
     try {
@@ -124,10 +123,10 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
       for (FileBlockInfo fileBlockInfo : blockInfoList) {
         for (BlockLocation blockLocation : fileBlockInfo.getBlockInfo().getLocations()) {
           if (workerAddressCounts.containsKey(blockLocation.getWorkerAddress().toString())) {
-              workerAddressCounts.put(blockLocation.getWorkerAddress().toString(),
-              workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) + 1);
+            workerAddressCounts.put(blockLocation.getWorkerAddress().toString(),
+            workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) + 1);
           } else {
-              workerAddressCounts.put(blockLocation.getWorkerAddress().toString(), 1);
+            workerAddressCounts.put(blockLocation.getWorkerAddress().toString(), 1);
           }
           workerAddressId.put(blockLocation.getWorkerAddress().toString(),blockLocation.getWorkerId());
           if (workerAddressCounts.get(blockLocation.getWorkerAddress().toString()) == blockInfoList.size()) {
@@ -151,23 +150,19 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
 
     //qiniu: get the worker with most blocks.
     Map<String,Integer> worker = new LinkedHashMap<>();
-    List<String> list=new ArrayList<String>();
-    workerAddressCounts.entrySet().stream().sorted(Map.Entry.<String,Integer>comparingByValue().reversed()).
-    forEachOrdered(x -> worker.put(x.getKey(), x.getValue()));
-    int blockNum=worker.entrySet().iterator().next().getValue(); 
-    for(Map.Entry<String,Integer> entry:worker.entrySet()){
-            if(entry.getValue()!=blockNum){
-               break;
-            }
-            list.add(entry.getKey());
+    List<String> list = new ArrayList<String>();
+    workerAddressCounts.entrySet().stream().sorted(Map.Entry.<String,Integer>comparingByValue().reversed())
+      .forEachOrdered(x -> worker.put(x.getKey(), x.getValue()));
+    int blockNum = worker.entrySet().iterator().next().getValue();
+    for(Map.Entry<String,Integer> entry : worker.entrySet()){
+      if(entry.getValue() != blockNum){
+        break;
+      }
+      list.add(entry.getKey());
     }
 
-    if(list.size()==1){
-      return workerAddressId.get(list.get(0));
-    }
-    Collections.sort(list);
-    String maxAddress=list.get(list.size()-1);
-    return workerAddressId.get(maxAddress);
+    String uniqueAddress = list.get((int)fileId % list.size());
+    return workerAddressId.get(uniqueAddress);
   }
 
   /**
