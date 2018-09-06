@@ -16,8 +16,12 @@ import alluxio.PropertyKey;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -33,13 +37,15 @@ public final class UfsSyncPathCache {
       Configuration.getInt(PropertyKey.MASTER_UFS_PATH_CACHE_CAPACITY);
 
   /** Cache of paths which have been synced. */
-  private final Cache<String, Long> mCache;
+  //private final Cache<String, Long> mCache;
+  private final Map<String, Long> mCache;
 
   /**
    * Creates a new instance of {@link UfsSyncPathCache}.
    */
   public UfsSyncPathCache() {
-    mCache = CacheBuilder.newBuilder().maximumSize(MAX_PATHS).build();
+    //mCache = CacheBuilder.newBuilder().maximumSize(MAX_PATHS).build();
+    mCache = new ConcurrentHashMap<String, Long>();
   }
 
   /**
@@ -65,7 +71,8 @@ public final class UfsSyncPathCache {
       // Always sync.
       return true;
     }
-    Long lastSync = mCache.getIfPresent(path);
+    //Long lastSync = mCache.getIfPresent(path);
+    Long lastSync = mCache.get(path);
     if (lastSync == null) {
       // No info about the last sync, so trigger a sync.
       return true;

@@ -146,6 +146,14 @@ public class InodeTree implements JournalEntryIterable {
     mMountTable = mountTable;
   }
 
+  public Iterator<Inode<?>> iterator() {
+    return mInodes.iterator();
+  }
+
+  public Inode<?> getInode(long id) {
+    return mInodes.getFirst(id);
+  }
+
   /**
    * Initializes the root of the inode tree.
    *

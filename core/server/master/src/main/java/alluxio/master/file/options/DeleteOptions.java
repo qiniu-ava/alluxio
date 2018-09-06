@@ -27,6 +27,7 @@ public final class DeleteOptions {
   private boolean mRecursive;
   private boolean mAlluxioOnly;
   private boolean mUnchecked;
+  private boolean mCheckPersisted;  // for meta cache use only
 
   /**
    * @return the default {@link DeleteOptions}
@@ -56,6 +57,7 @@ public final class DeleteOptions {
     mRecursive = false;
     mAlluxioOnly = false;
     mUnchecked = false;
+    mCheckPersisted = false;
   }
 
   /**
@@ -86,6 +88,10 @@ public final class DeleteOptions {
    */
   public boolean isUnchecked() {
     return mUnchecked;
+  }
+
+  public boolean isCheckPersisted() {
+    return mCheckPersisted;
   }
 
   /**
@@ -123,6 +129,11 @@ public final class DeleteOptions {
    */
   public DeleteOptions setUnchecked(boolean unchecked) {
     mUnchecked = unchecked;
+    return this;
+  }
+
+  public DeleteOptions setCheckPersisted(boolean persisted) {
+    mCheckPersisted = persisted;
     return this;
   }
 

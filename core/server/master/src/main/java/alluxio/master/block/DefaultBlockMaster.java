@@ -229,7 +229,7 @@ public final class DefaultBlockMaster extends AbstractMaster implements BlockMas
   static public boolean addEvictFile(int type, long worker, PersistFile file) {
       Map<Long, PersistFile> m = getEvictFileMap(type, worker);
       if (m.get(file.getFileId()) != null) {
-          LOG.debug("===== EVICT[INFO] file already added:" + file.getFileId());
+          LOG.debug("=== EVICT[INFO] file already added:" + file.getFileId());
           return false;
       }
 
@@ -911,19 +911,6 @@ public final class DefaultBlockMaster extends AbstractMaster implements BlockMas
       worker.updateLastUpdatedTimeMs();
 
       List<Long> toRemoveBlocks = worker.getToRemoveBlocks();
-
-      // qiniu
-      ArrayList<Long> ids = new ArrayList<Long>();
-      Map<Long, PersistFile> frees = DefaultBlockMaster.getEvictFileMap(DefaultBlockMaster.EVICT_FREE, workerId);
-      Iterator<Map.Entry<Long, PersistFile>> it = frees.entrySet().iterator();
-      while (it.hasNext()) {
-          PersistFile f = it.next().getValue();
-          LOG.debug("===== EVICT[FREE] worker:" + workerId + " file:" + f.getFileId() + " blocks:" + f.getBlockIds());
-          ids.addAll(f.getBlockIds());
-      }
-      frees.clear();
-
-      toRemoveBlocks.addAll(ids);
 
       if (toRemoveBlocks.isEmpty()) {
         return new Command(CommandType.Nothing, new ArrayList<Long>());
