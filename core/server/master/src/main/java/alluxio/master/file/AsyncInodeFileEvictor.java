@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Iterator;
+import java.util.Random;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -57,7 +58,7 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
   private final long mInodeCapacityLow;       /* stop sweep when inode number decrease to this */
   private long mLastSize;                     /* inode sizes when mark, used to adjust sweep count */
   private long mSweepCnt = SWEEP_BASE;        /* how many to sweep in one pass */
-  private long mLastCheckPointTs = 0;         /* used to control next checkpoint time */
+  private long mLastCheckPointTs = System.currentTimeMillis();         /* used to control next checkpoint time */
 
   /**
    * Constructs a new {@link LostFileDetector}.
@@ -71,7 +72,12 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
   }
 
   private void mark() {
-    if (mInodeTree.getSize() <= mInodeCapacity) return;
+    if (mInodeTree.getSize() <= mInodeCapacity) {
+      if ((new Random()).nextInt(1000) <= 10) {   // every 8min output inode size
+        LOG.info("=== evict size {}, sweep idx {}", mInodeTree.getSize(), mSweepIdx);
+      }
+      return;
+    }
 
     mLastSize = mInodeTree.getSize();
     Iterator<Inode<?>> it = mInodeTree.iterator();
@@ -123,6 +129,7 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
     if (mSweepIdx >= SLOT) {
       if (mInodeTree.getSize() > mLastSize) {
         mSweepCnt = mSweepCnt / 100 * 120;
+        if (mSweepCnt > 2 * SWEEP_BASE) mSweepCnt = 2 * SWEEP_BASE;
       } else {
         mSweepCnt = mSweepCnt * 100 / 120;
         if (mSweepCnt < SWEEP_BASE) mSweepCnt = SWEEP_BASE;
@@ -132,7 +139,7 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
   }
 
   private boolean mayCheckPoint() throws IOException {
-    if (mMin == 0 || mMax <= mMin || mLastCheckPointTs == 0
+    if (mMin == 0 || mMax <= mMin 
         || System.currentTimeMillis() - mLastCheckPointTs < CHECKPOINT_INTERVAL) return false;
 
     Iterator<Inode<?>> it = mInodeTree.iterator();
@@ -185,7 +192,7 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
     return true;
   }
 
-  public void readCheckpoint() throws IOException {
+  private void readCheckpoint() throws IOException {
     String dir = Configuration.get(PropertyKey.MASTER_JOURNAL_FOLDER);
     if (!dir.endsWith(AlluxioURI.SEPARATOR)) dir += AlluxioURI.SEPARATOR;
 

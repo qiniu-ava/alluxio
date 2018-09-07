@@ -634,8 +634,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       getExecutorService().submit(
           new HeartbeatThread(HeartbeatContext.MASTER_ASYNC_INODE_EVICT,
               new AsyncInodeFileEvictor(this, mInodeTree, INODE_CAPACITY, INODE_CAPACITY_EVICT),
-              //(int) Configuration.getMs(PropertyKey.MASTER_WORKER_HEARTBEAT_INTERVAL)));
-              (int) 2000)); 
+              (int) Configuration.getMs(PropertyKey.MASTER_INODE_EVICT_INTERVAL)));
       if (Configuration.getBoolean(PropertyKey.MASTER_STARTUP_CONSISTENCY_CHECK_ENABLED)) {
         mStartupConsistencyCheck = getExecutorService().submit(() -> startupCheckConsistency(
             ExecutorServiceFactories
