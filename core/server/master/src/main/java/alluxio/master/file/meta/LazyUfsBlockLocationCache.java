@@ -19,15 +19,14 @@ import alluxio.resource.CloseableResource;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.options.FileLocationOptions;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -44,7 +43,6 @@ public class LazyUfsBlockLocationCache implements UfsBlockLocationCache {
       Configuration.getInt(PropertyKey.MASTER_UFS_BLOCK_LOCATION_CACHE_CAPACITY);
 
   /** Cache of ufs block locations, key is block ID, value is block locations. */
-  //private Cache<Long, List<String>> mCache;
   private Map<Long, List<String>> mCache;
   private MountTable mMountTable;
 
@@ -54,26 +52,32 @@ public class LazyUfsBlockLocationCache implements UfsBlockLocationCache {
    * @param mountTable the mount table
    */
   public LazyUfsBlockLocationCache(MountTable mountTable) {
-    //mCache = CacheBuilder.newBuilder().maximumSize(MAX_BLOCKS).build();
     mCache = new ConcurrentHashMap<Long, List<String>>();
     mMountTable = mountTable;
   }
 
   @Override
   public void invalidate(long blockId) {
-    //mCache.invalidate(blockId);
     mCache.remove(blockId);
   }
 
   @Override
   public List<String> get(long blockId) {
-    //return mCache.getIfPresent(blockId);
     return mCache.get(blockId);
   }
 
+  private static <T> void reduceCacheSize(Map<T, ?> m) {
+    List<T> ls = new ArrayList<T>(m.keySet());
+    Random rd = new Random();
+    int remove = MAX_BLOCKS / 10;   // 10% off
+    for (int i = 0; i < remove; i++) {
+      m.remove(ls.get(rd.nextInt(ls.size())));
+    }
+  }
+
+
   @Override
   public List<String> get(long blockId, AlluxioURI fileUri, long offset) {
-    //List<String> locations = mCache.getIfPresent(blockId);
     List<String> locations = mCache.get(blockId);
     if (locations != null) {
       return locations;
@@ -86,12 +90,8 @@ public class LazyUfsBlockLocationCache implements UfsBlockLocationCache {
         locations = ufs.getFileLocations(ufsUri, FileLocationOptions.defaults().setOffset(offset));
       }
       if (locations != null) {
+        if (mCache.size() >= MAX_BLOCKS) reduceCacheSize(mCache);
         mCache.put(blockId, locations);
-        if (mCache.size() > MAX_BLOCKS) {
-          for (int i = 0; i < MAX_BLOCKS / 10; i++) {
-            mCache.keySet().iterator().remove();
-          }
-        }
         return locations;
       }
     } catch (InvalidPathException | IOException e) {

@@ -14,13 +14,13 @@ package alluxio.master.file.meta;
 import alluxio.Configuration;
 import alluxio.PropertyKey;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -44,8 +44,16 @@ public final class UfsSyncPathCache {
    * Creates a new instance of {@link UfsSyncPathCache}.
    */
   public UfsSyncPathCache() {
-    //mCache = CacheBuilder.newBuilder().maximumSize(MAX_PATHS).build();
     mCache = new ConcurrentHashMap<String, Long>();
+  }
+
+  private static <T> void reduceCacheSize(Map<T, ?> m) {
+    List<T> ls = new ArrayList<T>(m.keySet());
+    Random rd = new Random();
+    int remove = MAX_PATHS / 10;   // 10% off
+    for (int i = 0; i < remove; i++) {
+      m.remove(ls.get(rd.nextInt(ls.size())));
+    }
   }
 
   /**
@@ -54,6 +62,7 @@ public final class UfsSyncPathCache {
    * @param path the path that was synced
    */
   public void notifySyncedPath(String path) {
+    if (mCache.size() >= MAX_PATHS) reduceCacheSize(mCache);
     mCache.put(path, System.currentTimeMillis());
   }
 
@@ -71,7 +80,6 @@ public final class UfsSyncPathCache {
       // Always sync.
       return true;
     }
-    //Long lastSync = mCache.getIfPresent(path);
     Long lastSync = mCache.get(path);
     if (lastSync == null) {
       // No info about the last sync, so trigger a sync.
