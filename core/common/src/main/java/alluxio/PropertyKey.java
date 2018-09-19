@@ -1344,13 +1344,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.MASTER)
           .build();
-  public static final PropertyKey MASTER_INODE_PERSIST_DELETE_RATIO =
-      new Builder(Name.MASTER_INODE_PERSIST_DELETE_RATIO)
-          .setDefaultValue(50)
-          .setDescription("The ratio of inode to delete  async persisted file.")
-          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
-          .setScope(Scope.MASTER)
-          .build();
   public static final PropertyKey MASTER_INODE_CHECKPOINT_INTERVAL_MS =
       new Builder(Name.MASTER_INODE_CHECKPOINT_INTERVAL_MS)
           .setAlias(new String[]{"alluxio.master.inode.checkpoint.interval.ms"})
@@ -3322,8 +3315,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.master.inode.evict.interval";
     public static final String MASTER_INODE_EVICT_BASE =
         "alluxio.master.inode.evict.base";
-    public static final String MASTER_INODE_PERSIST_DELETE_RATIO =
-        "alluxio.master.inode.persist.delete.ratio";
     public static final String MASTER_INODE_CHECKPOINT_INTERVAL_MS =
         "alluxio.master.inode.checkpoint.interval";
     public static final String MASTER_UFS_PATH_CACHE_THREADS =

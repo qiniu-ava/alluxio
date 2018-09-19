@@ -201,7 +201,7 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
                   filesToPersist.add(new PersistFile(fileId, blockIds));
               }
           } catch (FileDoesNotExistException e) {
-              LOG.warn("==== fileId {} removed during asyn persist", fileId);
+              LOG.warn("==== fileId {} removed during asyn persist: {}", fileId, e.getMessage());
               fileIdsRemoved.add(fileId);
           }
       }

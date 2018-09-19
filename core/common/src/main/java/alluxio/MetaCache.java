@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.List;
 import java.nio.file.Path;
@@ -176,12 +177,12 @@ public class MetaCache {
     return (c != null) ? c.getStatus() : null;
   }
 
-  private static <T> void reduceCacheSize(Map<T, ?> m) {
+  public static <T> void reduceCacheSize(Map<T, ?> m, int percent) {
     List<T> ls = new ArrayList<T>(m.keySet());
-    Random rd = new Random();
-    int remove = maxCachedPaths / 10;   // 10% off
-    for (int i = 0; i < remove; i++) {
-      m.remove(ls.get(rd.nextInt(ls.size())));
+    Random rd = new Random(System.currentTimeMillis());
+    Iterator<T> it = m.keySet().iterator();
+    while (it.hasNext()) {
+      if (rd.nextInt(100) <= percent) it.remove();   // 10% off
     }
   }
 
@@ -190,7 +191,7 @@ public class MetaCache {
         || s.getLength() == 0 || s.getInAlluxioPercentage() != 100) return;
 
     path = resolve(path);
-    if (fcache.size() >= maxCachedPaths) reduceCacheSize(fcache);
+    if (fcache.size() >= maxCachedPaths) reduceCacheSize(fcache, 10);
     MetaCacheData c = fcache.get(path);
     if (c == null) {
       c = new MetaCacheData(path);
@@ -207,7 +208,7 @@ public class MetaCache {
 
   public static AlluxioURI getURI(String path) {
     path = resolve(path);
-    if (fcache.size() >= maxCachedPaths) reduceCacheSize(fcache);
+    if (fcache.size() >= maxCachedPaths) reduceCacheSize(fcache, 10);
     MetaCacheData c = fcache.get(path); //confirm to original code logic
     if (c == null) {
       c = new MetaCacheData(path);
@@ -247,7 +248,7 @@ public class MetaCache {
   public static void addBlockInfoCache(long blockId, BlockInfo info) {
     if (!block_cache_enabled) return;
 
-    if (bcache.size() >= maxCachedPaths) reduceCacheSize(bcache);
+    if (bcache.size() >= maxCachedPaths) reduceCacheSize(bcache, 10);
     BlockInfoData data = bcache.get(blockId);
     if (data == null) {
       data = new BlockInfoData(blockId);

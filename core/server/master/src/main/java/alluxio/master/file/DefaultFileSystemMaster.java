@@ -146,9 +146,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.google.common.io.Closer;
-
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.thrift.TProcessor;
 import org.slf4j.Logger;
@@ -322,8 +320,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
   private final long INODE_CAPACITY = Configuration.getLong(PropertyKey.MASTER_INODE_CAPACITY);
   private final long INODE_CAPACITY_EVICT = INODE_CAPACITY / 100
         * Configuration.getLong(PropertyKey.MASTER_INODE_EVICT_RATIO);
-  private final long INODE_CAPACITY_DELETE = INODE_CAPACITY / 100
-        * Configuration.getLong(PropertyKey.MASTER_INODE_PERSIST_DELETE_RATIO);
 
   private static final int MAX_PATHS =
       Configuration.getInt(PropertyKey.MASTER_UFS_PATH_CACHE_CAPACITY);
@@ -345,6 +341,8 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
 
   /** The handler for async persistence. */
   private final AsyncPersistHandler mAsyncPersistHandler;
+
+  private final AsyncInodeFileEvictor mAsyncInodeFileEvictor;
 
   /** The manager of all ufs. */
   private final MasterUfsManager mUfsManager;
@@ -417,6 +415,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     mWhitelist = new PrefixList(Configuration.getList(PropertyKey.MASTER_WHITELIST, ","));
 
     mAsyncPersistHandler = AsyncPersistHandler.Factory.create(new FileSystemMasterView(this));
+    mAsyncInodeFileEvictor = new AsyncInodeFileEvictor(this, mInodeTree, INODE_CAPACITY, INODE_CAPACITY_EVICT);
     mPermissionChecker = new DefaultPermissionChecker(mInodeTree);
     mUfsAbsentPathCache = UfsAbsentPathCache.Factory.create(mMountTable);
     mUfsBlockLocationCache = UfsBlockLocationCache.Factory.create(mMountTable);
@@ -633,7 +632,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
               (int) Configuration.getMs(PropertyKey.MASTER_WORKER_HEARTBEAT_INTERVAL)));
       getExecutorService().submit(
           new HeartbeatThread(HeartbeatContext.MASTER_ASYNC_INODE_EVICT,
-              new AsyncInodeFileEvictor(this, mInodeTree, INODE_CAPACITY, INODE_CAPACITY_EVICT),
+              mAsyncInodeFileEvictor,
               (int) Configuration.getMs(PropertyKey.MASTER_INODE_EVICT_INTERVAL)));
       if (Configuration.getBoolean(PropertyKey.MASTER_STARTUP_CONSISTENCY_CHECK_ENABLED)) {
         mStartupConsistencyCheck = getExecutorService().submit(() -> startupCheckConsistency(
@@ -839,11 +838,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         auditContext.setAllowed(false);
         throw e;
       }
-      /*
-      if (!inodePath.fullPathExists() && inodePath.getLastExistingInode().isFile()) {
-        lockingScheme.setShouldSync(true);
-      }
-      */
       // Possible ufs sync.
       if (syncMetadata(rpcContext, inodePath, lockingScheme, DescendantType.ONE)) {
         // If synced, do not load metadata.
@@ -860,7 +854,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       }
       FileInfo fileInfo = getFileInfoInternal(inodePath);
       auditContext.setSrcInode(inodePath.getInode()).setSucceeded(true);
-
       return fileInfo;
     }
   }
@@ -1514,12 +1507,11 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
   }
 
   @Override
-  public boolean delete(AlluxioURI path, DeleteOptions options) throws IOException,
+  public void delete(AlluxioURI path, DeleteOptions options) throws IOException,
       FileDoesNotExistException, DirectoryNotEmptyException, InvalidPathException,
       AccessControlException {
     List<Inode<?>> deletedInodes;
     Metrics.DELETE_PATHS_OPS.inc();
-    boolean persistBeforDelete = false;
     LockingScheme lockingScheme =
         createLockingScheme(path, options.getCommonOptions(), InodeTree.LockMode.WRITE);
     try (RpcContext rpcContext = createRpcContext();
@@ -1559,38 +1551,18 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         throw new FileDoesNotExistException(ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(path));
       }
 
-      //qiniu - allow next ls to list file deleted with -alluxioOnly
-      if (options.isAlluxioOnly() && (!options.isCheckPersisted() || inodePath.getInode().isPersisted())) {
+      if (options.isAlluxioOnly() && inodePath.getInode().isPersisted()) {
         InodeDirectory parentDir = inodePath.getParentInodeDirectory();
-        //TODO: check is root?
-        //TODO: don't have to lockWrite()? lockWrite may cause dead lock
         if (parentDir.isDirectChildrenLoaded()) {
           parentDir.setDirectChildrenLoaded(false);
-          parentDir.removeChild(inodePath.getInode());
           rpcContext.getJournalContext().append(parentDir.toJournalEntry());
           LOG.info("=== set off parent direct children load {}", path.getPath());
         }
       }
 
-      if (options.isCheckPersisted() && !inodePath.getInode().isPersisted()) {
-        persistBeforDelete = true;
-      } else {
-        deleteAndJournal(rpcContext, inodePath, options);
-      }
+      deleteAndJournal(rpcContext, inodePath, options);
       auditContext.setSucceeded(true);
     }
-
-    if (persistBeforDelete) {
-      LOG.info("=== evict schedule async persist {}", path.getPath());
-      try {
-        mAsyncPersistHandler.scheduleAsyncPersistence(path);
-      } catch (AlluxioException | UnavailableException e) {
-        LOG.error("=== evict schedule async persist err: {}", e.getMessage());
-      }
-      return false;
-    }
-
-    return true;
   }
 
   /**
@@ -3219,6 +3191,8 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         throw new FileDoesNotExistException(ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(path));
       }
 
+      inodePath.getInode().setLastAccessTs(options.getAccessTimeMs());  // not persisted
+
       setAttributeAndJournal(rpcContext, inodePath, rootRequired, ownerRequired, options);
       auditContext.setSucceeded(true);
     }
@@ -3278,10 +3252,17 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     journalSetAttribute(inodePath, opTimeMs, options, rpcContext.getJournalContext());
   }
 
-  private void journalSetAttribute(Inode inode, long opTimeMs,
+  /**
+   * @param inodePath the file path to use
+   * @param opTimeMs the operation time (in milliseconds)
+   * @param options the method options
+   * @param journalContext the journal context
+   * @throws FileDoesNotExistException if path does not exist
+   */
+  private void journalSetAttribute(LockedInodePath inodePath, long opTimeMs,
       SetAttributeOptions options, JournalContext journalContext) throws FileDoesNotExistException {
     SetAttributeEntry.Builder builder =
-        SetAttributeEntry.newBuilder().setId(inode.getId()).setOpTimeMs(opTimeMs);
+        SetAttributeEntry.newBuilder().setId(inodePath.getInode().getId()).setOpTimeMs(opTimeMs);
     if (options.getPinned() != null) {
       builder.setPinned(options.getPinned());
     }
@@ -3306,18 +3287,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       builder.setUfsFingerprint(options.getUfsFingerprint());
     }
     journalContext.append(JournalEntry.newBuilder().setSetAttribute(builder).build());
-  }
-
-  /**
-   * @param inodePath the file path to use
-   * @param opTimeMs the operation time (in milliseconds)
-   * @param options the method options
-   * @param journalContext the journal context
-   * @throws FileDoesNotExistException if path does not exist
-   */
-  private void journalSetAttribute(LockedInodePath inodePath, long opTimeMs,
-      SetAttributeOptions options, JournalContext journalContext) throws FileDoesNotExistException {
-    journalSetAttribute(inodePath.getInode(), opTimeMs, options, journalContext);
   }
 
   @Override
@@ -3626,38 +3595,11 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
           Constants.INVALID_UFS_FINGERPRINT;
       try {
         // Permission checking for each file is performed inside setAttribute
-        AlluxioURI uri = getPath(fileId);
-        //setAttribute(uri,
-        //    SetAttributeOptions.defaults().setPersisted(true).setUfsFingerprint(ufsFingerprint));
-        /*
-        AlluxioURI parentUri = uri.getParent();
-        boolean isChildrenLoaded = false;
-        try (LockedInodePath inodePath = mInodeTree
-            .lockFullInodePath(parentUri, InodeTree.LockMode.READ)) {
-          InodeDirectory dir = (InodeDirectory)inodePath.getInode();
-          isChildrenLoaded = dir.isDirectChildrenLoaded();
-          if (isChildrenLoaded) {
-            dir.setDirectChildrenLoaded(false);
-          }
-        }
-        if (isChildrenLoaded) {  // dummy, force journal
-          setAttribute(parentUri, SetAttributeOptions.defaults() 
-              .setUfsFingerprint(Constants.INVALID_UFS_FINGERPRINT));
-          LOG.info("=== set children not loaded for {}", parentUri.getPath());
-        }
-        */
-        if (mInodeTree.getSize() > INODE_CAPACITY_DELETE) {
-          delete(uri, DeleteOptions.defaults().setAlluxioOnly(true));
-          LOG.debug("=== evict async delete {}:{}", fileId, uri.getPath());
-        } else {
-          setAttribute(uri,
-              SetAttributeOptions.defaults().setPersisted(true).setUfsFingerprint(ufsFingerprint));
-          LOG.debug("=== evict async set persisted {}:{}", fileId, uri.getPath());
-        }
+        setAttribute(getPath(fileId),
+            SetAttributeOptions.defaults().setPersisted(true).setUfsFingerprint(ufsFingerprint)
+            .setAccessTimeMs(mAsyncInodeFileEvictor.getMin()));   // will be removed first if not successive access
       } catch (FileDoesNotExistException | AccessControlException | InvalidPathException e) {
         LOG.error("Failed to set file {} as persisted, because {}", fileId, e);
-      } catch (IOException | DirectoryNotEmptyException e) {
-        LOG.error(" === Failed to async delete file {} , because {}", fileId, e);
       }
     }
 

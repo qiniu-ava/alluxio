@@ -12,6 +12,7 @@
 package alluxio.master.file.meta;
 
 import alluxio.Configuration;
+import alluxio.MetaCache;
 import alluxio.PropertyKey;
 
 import org.slf4j.Logger;
@@ -47,22 +48,13 @@ public final class UfsSyncPathCache {
     mCache = new ConcurrentHashMap<String, Long>();
   }
 
-  private static <T> void reduceCacheSize(Map<T, ?> m) {
-    List<T> ls = new ArrayList<T>(m.keySet());
-    Random rd = new Random();
-    int remove = MAX_PATHS / 10;   // 10% off
-    for (int i = 0; i < remove; i++) {
-      m.remove(ls.get(rd.nextInt(ls.size())));
-    }
-  }
-
   /**
    * Notifies the cache that the path was synced.
    *
    * @param path the path that was synced
    */
   public void notifySyncedPath(String path) {
-    if (mCache.size() >= MAX_PATHS) reduceCacheSize(mCache);
+    if (mCache.size() >= MAX_PATHS) MetaCache.reduceCacheSize(mCache, 10);
     mCache.put(path, System.currentTimeMillis());
   }
 
