@@ -13,6 +13,7 @@ package alluxio.master.file.meta;
 
 import alluxio.AlluxioURI;
 import alluxio.Configuration;
+import alluxio.MetaCache;
 import alluxio.PropertyKey;
 import alluxio.exception.InvalidPathException;
 import alluxio.resource.CloseableResource;
@@ -66,16 +67,6 @@ public class LazyUfsBlockLocationCache implements UfsBlockLocationCache {
     return mCache.get(blockId);
   }
 
-  private static <T> void reduceCacheSize(Map<T, ?> m) {
-    List<T> ls = new ArrayList<T>(m.keySet());
-    Random rd = new Random();
-    int remove = MAX_BLOCKS / 10;   // 10% off
-    for (int i = 0; i < remove; i++) {
-      m.remove(ls.get(rd.nextInt(ls.size())));
-    }
-  }
-
-
   @Override
   public List<String> get(long blockId, AlluxioURI fileUri, long offset) {
     List<String> locations = mCache.get(blockId);
@@ -90,7 +81,7 @@ public class LazyUfsBlockLocationCache implements UfsBlockLocationCache {
         locations = ufs.getFileLocations(ufsUri, FileLocationOptions.defaults().setOffset(offset));
       }
       if (locations != null) {
-        if (mCache.size() >= MAX_BLOCKS) reduceCacheSize(mCache);
+        if (mCache.size() >= MAX_BLOCKS) MetaCache.reduceCacheSize(mCache, 10);
         mCache.put(blockId, locations);
         return locations;
       }

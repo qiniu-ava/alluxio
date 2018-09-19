@@ -35,6 +35,7 @@ public final class SetAttributeOptions {
   private Short mMode;
   private boolean mRecursive;
   private long mOperationTimeMs;
+  private long mAccessTimeMs;   // not persisted yet
   private String mUfsFingerprint;
 
   /**
@@ -64,6 +65,7 @@ public final class SetAttributeOptions {
       mMode = options.isSetMode() ? options.getMode() : Constants.INVALID_MODE;
       mRecursive = options.isRecursive();
       mOperationTimeMs = System.currentTimeMillis();
+      mAccessTimeMs = System.currentTimeMillis();
     }
   }
 
@@ -79,6 +81,7 @@ public final class SetAttributeOptions {
     mMode = Constants.INVALID_MODE;
     mRecursive = false;
     mOperationTimeMs = System.currentTimeMillis();
+    mAccessTimeMs = System.currentTimeMillis();
     mUfsFingerprint = Constants.INVALID_UFS_FINGERPRINT;
   }
 
@@ -150,6 +153,10 @@ public final class SetAttributeOptions {
    */
   public long getOperationTimeMs() {
     return mOperationTimeMs;
+  }
+
+  public long getAccessTimeMs() {
+    return mAccessTimeMs;
   }
 
   /**
@@ -254,6 +261,11 @@ public final class SetAttributeOptions {
    */
   public SetAttributeOptions setOperationTimeMs(long operationTimeMs) {
     mOperationTimeMs = operationTimeMs;
+    return this;
+  }
+
+  public SetAttributeOptions setAccessTimeMs(long accessTimeMs) {
+    mAccessTimeMs = accessTimeMs;
     return this;
   }
 

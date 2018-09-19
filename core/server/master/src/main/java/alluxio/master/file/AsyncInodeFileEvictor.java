@@ -14,6 +14,7 @@ package alluxio.master.file;
 import alluxio.AlluxioURI;
 import alluxio.heartbeat.HeartbeatExecutor;
 import alluxio.master.file.meta.Inode;
+import alluxio.master.file.meta.InodeDirectory;
 import alluxio.master.file.meta.InodeFile;
 import alluxio.master.file.meta.InodeTree;
 import alluxio.master.file.options.DeleteOptions;
@@ -56,9 +57,7 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
   private long mMax = 0;                      /* max access timestamp for all nodes */
   private final long mInodeCapacity;          /* start sweep when inode number exceeds this */
   private final long mInodeCapacityLow;       /* stop sweep when inode number decrease to this */
-  private long mLastSize;                     /* inode sizes when mark, used to adjust sweep count */
   private long mSweepCnt = SWEEP_BASE;        /* how many to sweep in one pass */
-  private long mLastCheckPointTs = System.currentTimeMillis();         /* used to control next checkpoint time */
 
   /**
    * Constructs a new {@link LostFileDetector}.
@@ -69,17 +68,16 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
     mInodeTree = inodeTree;
     mInodeCapacity = capacity;
     mInodeCapacityLow = capacityLow;
+    LOG.info("=== evict started, wait for 5 min to work");
+  }
+
+  public long getMin() {
+    return (mMin == 0) ? System.currentTimeMillis() : mMin;
   }
 
   private void mark() {
-    if (mInodeTree.getSize() <= mInodeCapacity) {
-      if ((new Random()).nextInt(1000) <= 10) {   // every 8min output inode size
-        LOG.info("=== evict size {}, sweep idx {}", mInodeTree.getSize(), mSweepIdx);
-      }
-      return;
-    }
+    if (mInodeTree.getSize() <= mInodeCapacity) return;
 
-    mLastSize = mInodeTree.getSize();
     Iterator<Inode<?>> it = mInodeTree.iterator();
     mMin = Long.MAX_VALUE;
     mMax = Long.MIN_VALUE;
@@ -97,50 +95,62 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
   }
 
   private void sweep() {
-    if (mInodeTree.getSize() <= mInodeCapacityLow) {
+    long size = mInodeTree.getSize();
+    if (size <= mInodeCapacityLow) {
       mStep = STEP_MARK;
       return;
     }
 
-    long delFrom  = mMin + (mMax - mMin) / SLOT * mSweepIdx;
     long delTo = mMin + (mMax - mMin) / SLOT * (mSweepIdx + 1), cnt = 0;
 
     Iterator<Inode<?>> it = mInodeTree.iterator();
     while (it.hasNext() && cnt < mSweepCnt && mInodeTree.getSize() > mInodeCapacityLow) {
       Inode<?> node = it.next();
-      if (node instanceof InodeFile) {
-        if (node.getLastAccessTs() >= delFrom && node.getLastAccessTs() < delTo ) {
-          try {
-            AlluxioURI uri = mFileSystemMaster.getPath(node.getId());
-            if (mFileSystemMaster.delete(uri, DeleteOptions.defaults().setAlluxioOnly(true).setCheckPersisted(true))) {
-              cnt++;
-            }
-            LOG.debug("=== inode evict async delete {}:{}", node.getId(), uri.getPath());
-          } catch (Exception e) {
-            LOG.error(" === Failed to async inode evict file {} , because {}", node.getId(), e);
+      try {
+        if (node instanceof InodeFile && node.getLastAccessTs() < delTo) {
+          AlluxioURI uri = mFileSystemMaster.getPath(node.getId());
+          if (node.isPersisted()) {
+            mFileSystemMaster.delete(uri, DeleteOptions.defaults().setAlluxioOnly(true));
+            LOG.debug("=== evict async delete {}:{}", node.getId(), uri.getPath());
+            cnt++;
+          } else {
+            mFileSystemMaster.scheduleAsyncPersistence(uri);
+            LOG.debug("=== evict async schedule {}:{}", node.getId(), uri.getPath());
           }
+        } else if (node instanceof InodeDirectory && node.getLastAccessTs() < delTo
+            && ((InodeDirectory)node).getChildren().size() == 0
+            && !((InodeDirectory)node).isMountPoint()) {
+          AlluxioURI uri = mFileSystemMaster.getPath(node.getId());
+          mFileSystemMaster.delete(uri, DeleteOptions.defaults().setAlluxioOnly(true));
+          LOG.debug("=== evict async delete {}:{}", node.getId(), uri.getPath());
+          cnt++;
         }
+      } catch (Exception e) {
+        LOG.error(" === Failed to async inode evict file {} , because {}", node.getId(), e);
       }
-    }
-
-    LOG.info("=== evict sweep {} [{}]:{} -> {}", cnt, mSweepIdx, mLastSize, mInodeTree.getSize());
+    } // while
 
     if (!it.hasNext()) mSweepIdx++;
     if (mSweepIdx >= SLOT) {
-      if (mInodeTree.getSize() > mLastSize) {
-        mSweepCnt = mSweepCnt / 100 * 120;
-        if (mSweepCnt > 2 * SWEEP_BASE) mSweepCnt = 2 * SWEEP_BASE;
-      } else {
-        mSweepCnt = mSweepCnt * 100 / 120;
-        if (mSweepCnt < SWEEP_BASE) mSweepCnt = SWEEP_BASE;
-      }
       mStep = STEP_MARK;  // again
     }
+
+    LOG.info("=== evict sweep {} [{}]:{} -> {}", cnt, mSweepIdx, size, mInodeTree.getSize());
+
+    if (cnt > 0 && size < mInodeTree.getSize()) {
+      mSweepCnt = mSweepCnt / 100 * 120;
+      if (mSweepCnt > 2 * SWEEP_BASE) mSweepCnt = 2 * SWEEP_BASE;
+    } else {
+      mSweepCnt = mSweepCnt * 100 / 120;
+      if (mSweepCnt < SWEEP_BASE) mSweepCnt = SWEEP_BASE;
+    }
+
   }
 
+  private long mLastCheckPointTs = System.currentTimeMillis();         /* used to control next checkpoint time */
   private boolean mayCheckPoint() throws IOException {
-    if (mMin == 0 || mMax <= mMin 
-        || System.currentTimeMillis() - mLastCheckPointTs < CHECKPOINT_INTERVAL) return false;
+    if (mMax <= mMin || System.currentTimeMillis() - mLastCheckPointTs < CHECKPOINT_INTERVAL) return false;
+    mLastCheckPointTs = System.currentTimeMillis();
 
     Iterator<Inode<?>> it = mInodeTree.iterator();
     int idx, slot100 = 100;
@@ -188,7 +198,6 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
     }
 
     FileUtils.move(src, dir + "heat");
-    mLastCheckPointTs = System.currentTimeMillis();
     return true;
   }
 
@@ -218,8 +227,19 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
     mStep = STEP_MARK;
   }
 
+  private final long mStartedWait = System.currentTimeMillis();
+  private long mLastPrintTs = System.currentTimeMillis();
   @Override
   public void heartbeat() {
+    long wait = Configuration.getBoolean(PropertyKey.TEST_MODE) ? 30 * 1000 : 300 * 1000;
+    if (System.currentTimeMillis() - mStartedWait < wait) return;
+
+    wait = Configuration.getBoolean(PropertyKey.TEST_MODE) ? 60 * 1000 : 600 * 1000;
+    if (System.currentTimeMillis() - mLastPrintTs >= wait) {
+      LOG.info("=== evict size {}, sweep idx {}", mInodeTree.getSize(), mSweepIdx);
+      mLastPrintTs = System.currentTimeMillis();
+    }
+
     try {
       if (mayCheckPoint()) return;
       switch (mStep) {

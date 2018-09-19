@@ -65,6 +65,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
     mTtl = Constants.NO_TTL;
     mTtlAction = TtlAction.DELETE;
     mLastModificationTimeMs = mCreationTimeMs;
+    mLastAccessTs = mCreationTimeMs;
     mName = null;
     mParentId = InodeTree.NO_PARENT;
     mMode = Constants.INVALID_MODE;
