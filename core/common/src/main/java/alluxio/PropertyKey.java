@@ -1331,6 +1331,13 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey MASTER_INODE_EVICT_CRITICAL_RATIO =
+      new Builder(Name.MASTER_INODE_EVICT_CRITICAL_RATIO)
+          .setDefaultValue(110)
+          .setDescription("The critical ratio of inode capacity.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
   public static final PropertyKey MASTER_INODE_EVICT_INTERVAL =
       new Builder(Name.MASTER_INODE_EVICT_INTERVAL)
           .setDefaultValue("5sec")
@@ -3311,6 +3318,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.master.inode.capacity";
     public static final String MASTER_INODE_EVICT_RATIO =
         "alluxio.master.inode.evict.ratio";
+    public static final String MASTER_INODE_EVICT_CRITICAL_RATIO =
+        "alluxio.master.inode.evict.critical.ratio";
     public static final String MASTER_INODE_EVICT_INTERVAL =
         "alluxio.master.inode.evict.interval";
     public static final String MASTER_INODE_EVICT_BASE =
