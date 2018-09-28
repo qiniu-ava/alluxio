@@ -320,6 +320,8 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
   private final long INODE_CAPACITY = Configuration.getLong(PropertyKey.MASTER_INODE_CAPACITY);
   private final long INODE_CAPACITY_EVICT = INODE_CAPACITY / 100
         * Configuration.getLong(PropertyKey.MASTER_INODE_EVICT_RATIO);
+  private final long INODE_CAPACITY_CRITICAL = INODE_CAPACITY / 100
+        * Configuration.getLong(PropertyKey.MASTER_INODE_EVICT_CRITICAL_RATIO);
 
   private static final int MAX_PATHS =
       Configuration.getInt(PropertyKey.MASTER_UFS_PATH_CACHE_CAPACITY);
@@ -1325,11 +1327,20 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     }
   }
 
+  public void checkCriticalCapacity() throws AccessControlException {
+    if (mInodeTree.getSize() >= INODE_CAPACITY_CRITICAL) {
+      throw new AccessControlException("=== !!! Too many files! " + mInodeTree.getSize());
+    }
+  }
+
   @Override
   public long createFile(AlluxioURI path, CreateFileOptions options)
       throws AccessControlException, InvalidPathException, FileAlreadyExistsException,
       BlockInfoException, IOException, FileDoesNotExistException {
     Metrics.CREATE_FILES_OPS.inc();
+
+    checkCriticalCapacity();  // not allowed if too many files
+    
     LockingScheme lockingScheme =
         createLockingScheme(path, options.getCommonOptions(), InodeTree.LockMode.WRITE);
     try (RpcContext rpcContext = createRpcContext();
@@ -1402,6 +1413,9 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     // If the create succeeded, the list of created inodes will not be empty.
     List<Inode<?>> created = createResult.getCreated();
     InodeFile inode = (InodeFile) created.get(created.size() - 1);
+
+    // don't let a ls of folder with many files flush out existing files
+    inode.setLastAccessTs(mAsyncInodeFileEvictor.getMiddle());
 
     mTtlBuckets.insert(inode);
 
@@ -2653,6 +2667,9 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
     AlluxioURI path = inodePath.getUri();
     MountTable.Resolution resolution = mMountTable.resolve(path);
     AlluxioURI ufsUri = resolution.getUri();
+
+    checkCriticalCapacity();
+
     try (CloseableResource<UnderFileSystem> ufsResource = resolution.acquireUfsResource()) {
       UnderFileSystem ufs = ufsResource.get();
       if (options.getUfsStatus() == null && !ufs.exists(ufsUri.toString())) {
@@ -2703,11 +2720,11 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
                       .setCreateAncestors(false).setUfsStatus(childStatus);
               loadMetadataAndJournal(rpcContext, tempInodePath, loadMetadataOptions);
 
-              if (options.getLoadDescendantType() == DescendantType.ALL
+              /*if (options.getLoadDescendantType() == DescendantType.ALL
                   && tempInodePath.getInode().isDirectory()) {
                 InodeDirectory inodeDirectory = (InodeDirectory) tempInodePath.getInode();
                 inodeDirectory.setDirectChildrenLoaded(true);
-              }
+              }*/
             }
 
           }

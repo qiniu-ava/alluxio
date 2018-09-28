@@ -75,6 +75,10 @@ final class AsyncInodeFileEvictor implements HeartbeatExecutor {
     return (mMin == 0) ? System.currentTimeMillis() : mMin;
   }
 
+  public long getMiddle() {
+    return (mMin + mMax) / 2;
+  }
+
   private void mark() {
     if (mInodeTree.getSize() <= mInodeCapacity) return;
 
