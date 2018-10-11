@@ -1,0 +1,11 @@
+diff a/core/server/master/src/test/java/alluxio/master/file/FileSystemMasterTest.java b/core/server/master/src/test/java/alluxio/master/file/FileSystemMasterTest.java	(rejected hunks)
+@@ -2470,8 +2468,7 @@ public final class FileSystemMasterTest {
+     mFileSystemMaster.loadMetadata(uri,
+         LoadMetadataOptions.defaults().setCreateAncestors(true));
+     FileInfo info = mFileSystemMaster.getFileInfo(uri, GetStatusOptions.defaults());
+-    Assert.assertTrue(info.convertAclToStringEntries().contains("user::rw-"));
+-
++    Assert.assertTrue(info.convertAclToStringEntries().contains("user::r-x"));
+   }
+ 
+   /**

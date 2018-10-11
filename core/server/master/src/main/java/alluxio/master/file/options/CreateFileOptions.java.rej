@@ -1,0 +1,57 @@
+diff a/core/server/master/src/main/java/alluxio/master/file/options/CreateFileOptions.java b/core/server/master/src/main/java/alluxio/master/file/options/CreateFileOptions.java	(rejected hunks)
+@@ -28,6 +28,9 @@ import javax.annotation.concurrent.NotThreadSafe;
+ @NotThreadSafe
+ public final class CreateFileOptions extends CreatePathOptions<CreateFileOptions> {
+   private long mBlockSizeBytes;
++  private int mReplicationDurable;
++  private int mReplicationMax;
++  private int mReplicationMin;
+   private boolean mCacheable;
+ 
+   /**
+@@ -52,6 +55,9 @@ public final class CreateFileOptions extends CreatePathOptions<CreateFileOptions
+       mBlockSizeBytes = options.getBlockSizeBytes();
+       mPersisted = options.isPersisted();
+       mRecursive = options.isRecursive();
++      mReplicationDurable = options.getReplicationDurable();
++      mReplicationMax = options.getReplicationMax();
++      mReplicationMin = options.getReplicationMin();
+       if (SecurityUtils.isAuthenticationEnabled()) {
+         mOwner = SecurityUtils.getOwnerFromThriftClient();
+         mGroup = SecurityUtils.getGroupFromThriftClient();
+@@ -67,6 +73,9 @@ public final class CreateFileOptions extends CreatePathOptions<CreateFileOptions
+   private CreateFileOptions() {
+     super();
+     mBlockSizeBytes = Configuration.getBytes(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT);
++    mReplicationDurable = Configuration.getInt(PropertyKey.USER_FILE_REPLICATION_DURABLE);
++    mReplicationMax = Configuration.getInt(PropertyKey.USER_FILE_REPLICATION_MAX);
++    mReplicationMin = Configuration.getInt(PropertyKey.USER_FILE_REPLICATION_MIN);
+     mMode.applyFileUMask();
+     mCacheable = false;
+   }
+@@ -121,17 +178,24 @@ public final class CreateFileOptions extends CreatePathOptions<CreateFileOptions
+     }
+     CreateFileOptions that = (CreateFileOptions) o;
+     return Objects.equal(mBlockSizeBytes, that.mBlockSizeBytes)
++        && Objects.equal(mReplicationDurable, that.mReplicationDurable)
++        && Objects.equal(mReplicationMax, that.mReplicationMax)
++        && Objects.equal(mReplicationMin, that.mReplicationMin)
+         && Objects.equal(mCacheable, that.mCacheable);
+   }
+ 
+   @Override
+   public int hashCode() {
+-    return super.hashCode() + Objects.hashCode(mBlockSizeBytes, mCacheable);
++    return super.hashCode() + Objects.hashCode(mBlockSizeBytes, mReplicationDurable,
++        mReplicationMax, mReplicationMin, mCacheable);
+   }
+ 
+   @Override
+   public String toString() {
+     return toStringHelper().add("blockSizeBytes", mBlockSizeBytes)
++        .add("replicationDurable", mReplicationDurable)
++        .add("replicationMax", mReplicationMax)
++        .add("replicationMin", mReplicationMin)
+         .add("cacheable", mCacheable).toString();
+   }
+ }

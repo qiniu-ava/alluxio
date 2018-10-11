@@ -1,0 +1,7 @@
+diff a/core/server/worker/src/main/java/alluxio/worker/block/BlockStoreEventListener.java b/core/server/worker/src/main/java/alluxio/worker/block/BlockStoreEventListener.java	(rejected hunks)
+@@ -82,5 +82,4 @@ public interface BlockStoreEventListener {
+    * @param blockId the id of the block to be removed
+    */
+   void onRemoveBlockByWorker(long sessionId, long blockId);
+-
+ }

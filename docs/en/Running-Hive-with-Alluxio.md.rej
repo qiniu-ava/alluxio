@@ -1,0 +1,55 @@
+diff a/docs/en/Running-Hive-with-Alluxio.md b/docs/en/Running-Hive-with-Alluxio.md	(rejected hunks)
+@@ -51,9 +49,6 @@ for Hive. In the following sections, Hive is running on Hadoop MapReduce in this
+ 
+ > Tips：All the following Hive CLI examples are also applicable to Hive Beeline. You can try these commands out in Beeline shell.
+ 
+-> Tips：All the following examples are also applicable to Alluxio in fault tolerant mode with Zookeeper. 
+-Please follow the instructions in [HDFS API to connect to Alluxio with high availability](Running-Alluxio-on-a-Cluster.html#hdfs-api).
+-
+ ### Create New Tables from Alluxio Files
+ 
+ Hive can create new tables from files stored on Alluxio. The setup is fairly straightforward
+@@ -204,43 +199,6 @@ Add the following property to `hive-site.xml` in your Hive installation `conf` d
+ </property>
+ ```
+ 
+-To use fault tolerant mode, set the Alluxio cluster properties appropriately (see example below) in
+-an `alluxio-site.properties` file which is on the classpath.
+-
+-```properties
+-alluxio.zookeeper.enabled=true
+-alluxio.zookeeper.address=[zookeeper_hostname]:2181
+-```
+-
+-Alternatively you can add the properties to the Hive `hive-site.xml` configuration which is then
+-propagated to Alluxio.
+-
+-```xml
+-<configuration>
+-  <property>
+-    <name>alluxio.zookeeper.enabled</name>
+-    <value>true</value>
+-  </property>
+-  <property>
+-    <name>alluxio.zookeeper.address</name>
+-    <value>[zookeeper_hostname]:2181</value>
+-  </property>
+-</configuration>
+-```
+-
+-### Add additional Alluxio site properties to Hive
+-
+-If there are any Alluxio site properties you want to specify for Hive, add those to `core-site.xml`
+-to Hadoop configuration directory on each node. For example, change
+-`alluxio.user.file.writetype.default` from default `MUST_CACHE` to `CACHE_THROUGH`:
+-
+-```xml
+-<property>
+-<name>alluxio.user.file.writetype.default</name>
+-<value>CACHE_THROUGH</value>
+-</property>
+-```
+-
+ ### Using Alluxio with Hive
+ 
+ Create Directories in Alluxio for Hive:

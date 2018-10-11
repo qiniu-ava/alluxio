@@ -1,0 +1,43 @@
+diff a/core/client/fs/src/main/java/alluxio/client/file/BaseFileSystem.java b/core/client/fs/src/main/java/alluxio/client/file/BaseFileSystem.java	(rejected hunks)
+@@ -12,6 +12,7 @@
+ package alluxio.client.file;
+ 
+ import alluxio.AlluxioURI;
++import alluxio.Constants;
+ import alluxio.annotation.PublicApi;
+ import alluxio.client.file.options.CreateDirectoryOptions;
+ import alluxio.client.file.options.CreateFileOptions;
+@@ -41,7 +42,9 @@ import alluxio.exception.status.FailedPreconditionException;
+ import alluxio.exception.status.InvalidArgumentException;
+ import alluxio.exception.status.NotFoundException;
+ import alluxio.exception.status.UnavailableException;
++import alluxio.master.MasterInquireClient;
+ import alluxio.security.authorization.AclEntry;
++import alluxio.uri.Authority;
+ import alluxio.wire.LoadMetadataType;
+ import alluxio.wire.MountPointInfo;
+ import alluxio.wire.SetAclAction;
+@@ -187,6 +194,7 @@ public class BaseFileSystem implements FileSystem {
+   @Override
+   public boolean exists(AlluxioURI path, ExistsOptions options)
+       throws InvalidPathException, IOException, AlluxioException {
++    checkUri(path);
+     FileSystemMasterClient masterClient = mFileSystemContext.acquireMasterClient();
+     try {
+       // TODO(calvin): Make this more efficient
+@@ -240,6 +249,7 @@ public class BaseFileSystem implements FileSystem {
+   @Override
+   public URIStatus getStatus(AlluxioURI path, GetStatusOptions options)
+       throws FileDoesNotExistException, IOException, AlluxioException {
++    checkUri(path);
+     FileSystemMasterClient masterClient = mFileSystemContext.acquireMasterClient();
+     try {
+       return masterClient.getStatus(path, options);
+@@ -403,6 +419,7 @@ public class BaseFileSystem implements FileSystem {
+   @Override
+   public void setAcl(AlluxioURI path, SetAclAction action, List<AclEntry> entries,
+       SetAclOptions options) throws FileDoesNotExistException, IOException, AlluxioException {
++    checkUri(path);
+     FileSystemMasterClient masterClient = mFileSystemContext.acquireMasterClient();
+     try {
+       masterClient.setAcl(path, action, entries, options);

@@ -882,6 +882,49 @@ public final class PropertyKey implements Comparable<PropertyKey> {
       .setDescription("Service region when using Keystone authentication.")
       .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
       .build();
+  public static final PropertyKey UNDERFS_KODO_REQUESTS_MAX =
+      new Builder(Name.UNDERFS_KODO_REQUESTS_MAX)
+          .setDefaultValue(64)
+          .setDescription("The maximum number of kodo connections.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey UNDERFS_KODO_CONNECT_TIMEOUT =
+      new Builder(Name.UNDERFS_KODO_CONNECT_TIMEOUT)
+          .setDefaultValue("50")
+          .setDescription("The connect timeout of kodo.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+
+  public static final PropertyKey KODO_ACCESS_KEY =
+      new Builder(Name.KODO_ACCESS_KEY)
+          .setDescription("The access key of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey KODO_SECRET_KEY =
+      new Builder(Name.KODO_SECRET_KEY)
+          .setDescription("The secret key of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .setDisplayType(DisplayType.CREDENTIALS)
+          .build();
+  public static final PropertyKey KODO_DOWNLOAD_HOST =
+      new Builder(Name.KODO_DOWNLOAD_HOST)
+          .setDescription("The Download domain of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey KODO_ENDPOINT =
+      new Builder(Name.KODO_ENDPOINT)
+          .setDescription("The  endpoint of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .build();
+
+
+
 
   // Journal ufs related properties
   public static final PropertyKey MASTER_JOURNAL_UFS_OPTION =
@@ -3208,6 +3251,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String UNDERFS_S3_THREADS_MAX = "alluxio.underfs.s3.threads.max";
     public static final String UNDERFS_S3_UPLOAD_THREADS_MAX =
         "alluxio.underfs.s3.upload.threads.max";
+    public static final String UNDERFS_KODO_CONNECT_TIMEOUT = "alluxio.underfs.kodo.connect.timeout";
+    public static final String UNDERFS_KODO_REQUESTS_MAX = "alluxio.underfs.kodo.requests.max";
 
     //
     // UFS access control related properties
@@ -3229,6 +3274,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String SWIFT_USER_KEY = "fs.swift.user";
     public static final String SWIFT_USE_PUBLIC_URI_KEY = "fs.swift.use.public.url";
     public static final String SWIFT_REGION_KEY = "fs.swift.region";
+    public static final String KODO_ACCESS_KEY = "fs.kodo.AccessKey";
+    public static final String KODO_SECRET_KEY = "fs.kodo.SecretKey";
+    public static final String KODO_ENDPOINT = "fs.kodo.EndPoint";
+    public static final String KODO_DOWNLOAD_HOST = "fs.kodo.DownloadHost";
 
     //
     // Master related properties

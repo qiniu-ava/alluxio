@@ -1,0 +1,9 @@
+diff a/tests/src/test/java/alluxio/client/cli/fs/AbstractFileSystemShellTest.java b/tests/src/test/java/alluxio/client/cli/fs/AbstractFileSystemShellTest.java	(rejected hunks)
+@@ -17,6 +17,7 @@ import static org.junit.Assert.assertTrue;
+ 
+ import alluxio.AlluxioURI;
+ import alluxio.cli.fs.FileSystemShell;
++import alluxio.cli.job.JobShell;
+ import alluxio.client.ReadType;
+ import alluxio.client.WriteType;
+ import alluxio.client.file.FileInStream;
