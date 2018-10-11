@@ -1,0 +1,19 @@
+diff a/core/server/master/src/main/java/alluxio/master/file/options/SetAttributeOptions.java b/core/server/master/src/main/java/alluxio/master/file/options/SetAttributeOptions.java	(rejected hunks)
+@@ -35,6 +35,8 @@ public final class SetAttributeOptions {
+   private Short mMode;
+   private boolean mRecursive;
+   private long mOperationTimeMs;
++  private Integer mReplicationMax;
++  private Integer mReplicationMin;
+   private String mUfsFingerprint;
+ 
+   /**
+@@ -64,6 +66,8 @@ public final class SetAttributeOptions {
+       mMode = options.isSetMode() ? options.getMode() : Constants.INVALID_MODE;
+       mRecursive = options.isRecursive();
+       mOperationTimeMs = System.currentTimeMillis();
++      mReplicationMax = options.isSetReplicationMax() ? options.getReplicationMax() : null;
++      mReplicationMin = options.isSetReplicationMin() ? options.getReplicationMin() : null;
+     }
+   }
+ 

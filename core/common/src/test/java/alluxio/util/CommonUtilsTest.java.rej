@@ -1,0 +1,15 @@
+diff a/core/common/src/test/java/alluxio/util/CommonUtilsTest.java b/core/common/src/test/java/alluxio/util/CommonUtilsTest.java	(rejected hunks)
+@@ -486,10 +509,10 @@ public class CommonUtilsTest {
+       });
+     }
+     try {
+-      CommonUtils.invokeAll(tasks, 500, TimeUnit.MILLISECONDS);
++      CommonUtils.invokeAll(tasks, 500);
+       fail("Expected an exception to be thrown");
+-    } catch (Exception e) {
+-      assertSame(testException, e);
++    } catch (ExecutionException e) {
++      assertSame(testException, e.getCause());
+     }
+   }
+ 

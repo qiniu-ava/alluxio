@@ -1,0 +1,27 @@
+diff a/underfs/s3a/src/main/java/alluxio/underfs/s3a/S3AUnderFileSystem.java b/underfs/s3a/src/main/java/alluxio/underfs/s3a/S3AUnderFileSystem.java	(rejected hunks)
+@@ -124,7 +147,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
+     // otherwise, use the default credential provider.
+     if (conf.isSet(PropertyKey.S3A_ACCESS_KEY)
+         && conf.isSet(PropertyKey.S3A_SECRET_KEY)) {
+-      return new StaticCredentialsProvider(new BasicAWSCredentials(
++      return new AWSStaticCredentialsProvider(new BasicAWSCredentials(
+           conf.get(PropertyKey.S3A_ACCESS_KEY), conf.get(PropertyKey.S3A_SECRET_KEY)));
+     }
+     // Checks, in order, env variables, system properties, profile file, and instance profile.
+@@ -181,11 +204,14 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
+     }
+     clientConf.setMaxConnections(numThreads);
+ 
+-    // Set client request timeout for all requests since multipart copy is used, and copy parts can
+-    // only be set with the client configuration.
++    // Set client request timeout for all requests since multipart copy is used,
++    // and copy parts can only be set with the client configuration.
+     clientConf
+         .setRequestTimeout((int) Configuration.getMs(PropertyKey.UNDERFS_S3A_REQUEST_TIMEOUT));
+ 
++    boolean streamingUploadEnabled =
++        conf.getBoolean(PropertyKey.UNDERFS_S3A_STREAMING_UPLOAD_ENABLED);
++
+     // Signer algorithm
+     if (conf.isSet(PropertyKey.UNDERFS_S3A_SIGNER_ALGORITHM)) {
+       clientConf.setSignerOverride(conf.get(PropertyKey.UNDERFS_S3A_SIGNER_ALGORITHM));

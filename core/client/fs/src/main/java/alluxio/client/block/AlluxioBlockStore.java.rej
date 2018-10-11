@@ -1,0 +1,9 @@
+diff a/core/client/fs/src/main/java/alluxio/client/block/AlluxioBlockStore.java b/core/client/fs/src/main/java/alluxio/client/block/AlluxioBlockStore.java	(rejected hunks)
+@@ -44,6 +44,7 @@ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+ import java.io.IOException;
++import java.net.ConnectException;
+ import java.util.Collections;
+ import java.util.List;
+ import java.util.Map;

@@ -1,0 +1,27 @@
+diff a/tests/pom.xml b/tests/pom.xml	(rejected hunks)
+@@ -161,6 +161,25 @@
+       <version>${project.version}</version>
+       <type>test-jar</type>
+     </dependency>
++    <dependency>
++      <groupId>org.alluxio</groupId>
++      <artifactId>alluxio-job-client</artifactId>
++      <version>${project.version}</version>
++      <scope>test</scope>
++    </dependency>
++    <dependency>
++      <groupId>org.alluxio</groupId>
++      <artifactId>alluxio-job-common</artifactId>
++      <version>${project.version}</version>
++      <type>test-jar</type>
++      <scope>test</scope>
++    </dependency>
++    <dependency>
++      <groupId>org.alluxio</groupId>
++      <artifactId>alluxio-job-server</artifactId>
++      <version>${project.version}</version>
++      <scope>test</scope>
++    </dependency>
+     <dependency>
+       <groupId>org.alluxio</groupId>
+       <artifactId>alluxio-core-server-proxy</artifactId>

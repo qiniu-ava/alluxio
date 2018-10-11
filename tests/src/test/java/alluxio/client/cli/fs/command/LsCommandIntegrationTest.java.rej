@@ -1,0 +1,7 @@
+diff a/tests/src/test/java/alluxio/client/cli/fs/command/LsCommandIntegrationTest.java b/tests/src/test/java/alluxio/client/cli/fs/command/LsCommandIntegrationTest.java	(rejected hunks)
+@@ -562,5 +562,4 @@ public final class LsCommandIntegrationTest extends AbstractFileSystemShellTest
+ 
+     Assert.assertEquals(expected, mOutput.toString());
+   }
+-
+ }

@@ -1,0 +1,64 @@
+diff a/core/client/fs/src/main/java/alluxio/client/file/options/CreateFileOptions.java b/core/client/fs/src/main/java/alluxio/client/file/options/CreateFileOptions.java	(rejected hunks)
+@@ -66,6 +69,9 @@ public final class CreateFileOptions {
+             PropertyKey.USER_FILE_WRITE_LOCATION_POLICY), new Class[] {}, new Object[] {});
+     mWriteTier = Configuration.getInt(PropertyKey.USER_FILE_WRITE_TIER_DEFAULT);
+     mWriteType = Configuration.getEnum(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, WriteType.class);
++    mReplicationDurable = Configuration.getInt(PropertyKey.USER_FILE_REPLICATION_DURABLE);
++    mReplicationMax = Configuration.getInt(PropertyKey.USER_FILE_REPLICATION_MAX);
++    mReplicationMin = Configuration.getInt(PropertyKey.USER_FILE_REPLICATION_MIN);
+     mMode = Mode.defaults().applyFileUMask();
+   }
+ 
+@@ -250,6 +310,9 @@ public final class CreateFileOptions {
+         .setBlockSizeBytes(mBlockSizeBytes)
+         .setLocationPolicy(mLocationPolicy)
+         .setMode(mMode)
++        .setReplicationDurable(mReplicationDurable)
++        .setReplicationMax(mReplicationMax)
++        .setReplicationMin(mReplicationMin)
+         .setWriteTier(mWriteTier)
+         .setWriteType(mWriteType);
+   }
+@@ -267,6 +330,9 @@ public final class CreateFileOptions {
+         && Objects.equal(mCommonOptions, that.mCommonOptions)
+         && Objects.equal(mBlockSizeBytes, that.mBlockSizeBytes)
+         && Objects.equal(mLocationPolicy, that.mLocationPolicy)
++        && Objects.equal(mReplicationDurable, that.mReplicationDurable)
++        && Objects.equal(mReplicationMax, that.mReplicationMax)
++        && Objects.equal(mReplicationMin, that.mReplicationMin)
+         && Objects.equal(mMode, that.mMode)
+         && mWriteTier == that.mWriteTier
+         && Objects.equal(mWriteType, that.mWriteType);
+@@ -274,9 +340,9 @@ public final class CreateFileOptions {
+ 
+   @Override
+   public int hashCode() {
+-    return Objects
+-        .hashCode(mRecursive, mBlockSizeBytes, mLocationPolicy, mMode, mWriteTier,
+-            mWriteType, mCommonOptions);
++    return Objects.hashCode(mRecursive, mBlockSizeBytes, mLocationPolicy, mMode,
++        mReplicationDurable, mReplicationMax, mReplicationMin, mWriteTier,
++        mWriteType, mCommonOptions);
+   }
+ 
+   @Override
+@@ -286,6 +352,9 @@ public final class CreateFileOptions {
+         .add("recursive", mRecursive)
+         .add("blockSizeBytes", mBlockSizeBytes)
+         .add("locationPolicy", mLocationPolicy)
++        .add("replicationDurable", mReplicationDurable)
++        .add("replicationMax", mReplicationMax)
++        .add("replicationMin", mReplicationMin)
+         .add("mode", mMode)
+         .add("writeTier", mWriteTier)
+         .add("writeType", mWriteType)
+@@ -300,6 +369,9 @@ public final class CreateFileOptions {
+     options.setBlockSizeBytes(mBlockSizeBytes);
+     options.setPersisted(mWriteType.isThrough());
+     options.setRecursive(mRecursive);
++    options.setReplicationDurable(mReplicationDurable);
++    options.setReplicationMax(mReplicationMax);
++    options.setReplicationMin(mReplicationMin);
+     if (mMode != null) {
+       options.setMode(mMode.toShort());
+     }

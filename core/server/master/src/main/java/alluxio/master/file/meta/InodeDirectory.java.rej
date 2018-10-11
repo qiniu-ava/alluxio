@@ -1,0 +1,21 @@
+diff a/core/server/master/src/main/java/alluxio/master/file/meta/InodeDirectory.java b/core/server/master/src/main/java/alluxio/master/file/meta/InodeDirectory.java	(rejected hunks)
+@@ -216,8 +216,9 @@ public final class InodeDirectory extends Inode<InodeDirectory> implements Inode
+   }
+ 
+   @Override
+-  public void setDefaultACL(DefaultAccessControlList acl) {
++  public InodeDirectory setDefaultACL(DefaultAccessControlList acl) {
+     mDefaultAcl = acl;
++    return getThis();
+   }
+ 
+   /**
+@@ -336,6 +337,8 @@ public final class InodeDirectory extends Inode<InodeDirectory> implements Inode
+         .setGroup(options.getGroup())
+         .setMode(options.getMode().toShort())
+         .setAcl(options.getAcl())
++        // SetAcl call is also setting default AclEntries
++        .setAcl(options.getDefaultAcl())
+         .setMountPoint(options.isMountPoint());
+   }
+ 

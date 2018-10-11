@@ -1,0 +1,32 @@
+diff a/core/common/src/main/java/alluxio/wire/FileInfo.java b/core/common/src/main/java/alluxio/wire/FileInfo.java	(rejected hunks)
+@@ -558,7 +592,8 @@ public final class FileInfo implements Serializable {
+         mCreationTimeMs, mCompleted, mFolder, mPinned, mCacheable, mPersisted, mBlockIds,
+         mInMemoryPercentage, mLastModificationTimeMs, mTtl, mOwner, mGroup, mMode,
+         mPersistenceState, mMountPoint, fileBlockInfos, TtlAction.toThrift(mTtlAction), mMountId,
+-        mInAlluxioPercentage, mUfsFingerprint, tAcl, tDefaultAcl);
++        mInAlluxioPercentage, mUfsFingerprint, tAcl, tDefaultAcl, mReplicationMax,
++        mReplicationMin);
+ 
+     return info;
+   }
+@@ -624,6 +661,7 @@ public final class FileInfo implements Serializable {
+         && mLastModificationTimeMs == that.mLastModificationTimeMs && mTtl == that.mTtl
+         && mOwner.equals(that.mOwner) && mGroup.equals(that.mGroup) && mMode == that.mMode
+         && mPersistenceState.equals(that.mPersistenceState) && mMountPoint == that.mMountPoint
++        && mReplicationMax == that.mReplicationMax && mReplicationMin == that.mReplicationMin
+         && mFileBlockInfos.equals(that.mFileBlockInfos) && mTtlAction == that.mTtlAction
+         && mMountId == that.mMountId && mInAlluxioPercentage == that.mInAlluxioPercentage
+         && mUfsFingerprint.equals(that.mUfsFingerprint)
+@@ -635,9 +673,9 @@ public final class FileInfo implements Serializable {
+   public int hashCode() {
+     return Objects.hashCode(mFileId, mName, mPath, mUfsPath, mLength, mBlockSizeBytes,
+         mCreationTimeMs, mCompleted, mFolder, mPinned, mCacheable, mPersisted, mBlockIds,
+-        mInMemoryPercentage, mLastModificationTimeMs, mTtl, mOwner, mGroup, mMode,
+-        mPersistenceState, mMountPoint, mFileBlockInfos, mTtlAction, mInAlluxioPercentage,
+-        mUfsFingerprint, mAcl, mDefaultAcl);
++        mInMemoryPercentage, mLastModificationTimeMs, mTtl, mOwner, mGroup, mMode, mReplicationMax,
++        mReplicationMin, mPersistenceState, mMountPoint, mFileBlockInfos, mTtlAction,
++        mInAlluxioPercentage, mUfsFingerprint, mAcl, mDefaultAcl);
+   }
+ 
+   @Override

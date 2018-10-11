@@ -1,0 +1,22 @@
+diff a/core/common/src/main/java/alluxio/client/file/URIStatus.java b/core/common/src/main/java/alluxio/client/file/URIStatus.java	(rejected hunks)
+@@ -185,6 +185,20 @@ public class URIStatus {
+     return mInfo.getOwner();
+   }
+ 
++  /**
++   * @return the maximum number of replicas of the entity referenced by this uri, mutable
++   */
++  public int getReplicationMax() {
++    return mInfo.getReplicationMax();
++  }
++
++  /**
++   * @return the minimum number of replicas of the entity referenced by this uri, mutable
++   */
++  public int getReplicationMin() {
++    return mInfo.getReplicationMin();
++  }
++
+   /**
+    * @return whether the entity referenced by this uri can be stored in Alluxio space, mutable
+    */

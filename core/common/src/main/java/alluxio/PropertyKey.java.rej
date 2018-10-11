@@ -1,0 +1,43 @@
+diff a/core/common/src/main/java/alluxio/PropertyKey.java b/core/common/src/main/java/alluxio/PropertyKey.java	(rejected hunks)
+@@ -3205,6 +3399,11 @@ public final class PropertyKey implements Comparable<PropertyKey> {
+     public static final String SWIFT_TENANT_KEY = "fs.swift.tenant";
+     public static final String SWIFT_USE_PUBLIC_URI_KEY = "fs.swift.use.public.url";
+     public static final String SWIFT_USER_KEY = "fs.swift.user";
++    public static final String KODO_ACCESS_KEY = "fs.kodo.AccessKey";
++    public static final String KODO_SECRET_KEY = "fs.kodo.SecretKey";
++    public static final String KODO_ENDPOINT = "fs.kodo.EndPoint";
++    public static final String KODO_DOWNLOAD_HOST = "fs.kodo.DownloadHost";
++
+ 
+     //
+     // Master related properties
+@@ -3251,6 +3450,18 @@ public final class PropertyKey implements Comparable<PropertyKey> {
+     public static final String MASTER_JOURNAL_TAILER_SLEEP_TIME_MS =
+         "alluxio.master.journal.tailer.sleep.time";
+     public static final String MASTER_KEYTAB_KEY_FILE = "alluxio.master.keytab.file";
++    public static final String MASTER_PERSISTENCE_CHECKER_INTERVAL_MS =
++        "alluxio.master.persistence.checker.interval.ms";
++    public static final String MASTER_PERSISTENCE_INITIAL_INTERVAL_MS =
++        "alluxio.master.persistence.initial.interval.ms";
++    public static final String MASTER_PERSISTENCE_INITIAL_WAIT_TIME_MS =
++        "alluxio.master.persistence.initial.wait.time.ms";
++    public static final String MASTER_PERSISTENCE_MAX_TOTAL_WAIT_TIME_MS =
++        "alluxio.master.persistence.max.total.wait.time.ms";
++    public static final String MASTER_PERSISTENCE_MAX_INTERVAL_MS =
++        "alluxio.master.persistence.max.interval.ms";
++    public static final String MASTER_PERSISTENCE_SCHEDULER_INTERVAL_MS =
++        "alluxio.master.persistence.scheduler.interval.ms";
+     public static final String MASTER_LOG_CONFIG_REPORT_HEARTBEAT_INTERVAL =
+         "alluxio.master.log.config.report.heartbeat.interval";
+     public static final String MASTER_PERIODIC_BLOCK_INTEGRITY_CHECK_REPAIR =
+@@ -3485,6 +3698,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
+     public static final String USER_FILE_LOAD_TTL_ACTION =
+         "alluxio.user.file.load.ttl.action";
+     public static final String USER_FILE_READ_TYPE_DEFAULT = "alluxio.user.file.readtype.default";
++    public static final String USER_FILE_REPLICATION_MAX = "alluxio.user.file.replication.max";
++    public static final String USER_FILE_REPLICATION_MIN = "alluxio.user.file.replication.min";
++    public static final String USER_FILE_REPLICATION_DURABLE =
++        "alluxio.user.file.replication.durable";
+     public static final String USER_FILE_SEEK_BUFFER_SIZE_BYTES =
+         "alluxio.user.file.seek.buffer.size.bytes";
+     public static final String USER_FILE_WAITCOMPLETED_POLL_MS =

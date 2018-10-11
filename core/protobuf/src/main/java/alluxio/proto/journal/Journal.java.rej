@@ -1,0 +1,64 @@
+diff a/core/protobuf/src/main/java/alluxio/proto/journal/Journal.java b/core/protobuf/src/main/java/alluxio/proto/journal/Journal.java	(rejected hunks)
+@@ -1470,18 +1554,30 @@ public final class Journal {
+     private alluxio.proto.journal.File.ReinitializeFileEntry reinitializeFile_;
+     /**
+      * <code>optional .alluxio.proto.journal.ReinitializeFileEntry reinitialize_file = 18;</code>
++     *
++     * <pre>
++     * deprecated, lineage is no longer supported
++     * </pre>
+      */
+     public boolean hasReinitializeFile() {
+       return ((bitField0_ & 0x00800000) == 0x00800000);
+     }
+     /**
+      * <code>optional .alluxio.proto.journal.ReinitializeFileEntry reinitialize_file = 18;</code>
++     *
++     * <pre>
++     * deprecated, lineage is no longer supported
++     * </pre>
+      */
+     public alluxio.proto.journal.File.ReinitializeFileEntry getReinitializeFile() {
+       return reinitializeFile_;
+     }
+     /**
+      * <code>optional .alluxio.proto.journal.ReinitializeFileEntry reinitialize_file = 18;</code>
++     *
++     * <pre>
++     * deprecated, lineage is no longer supported
++     * </pre>
+      */
+     public alluxio.proto.journal.File.ReinitializeFileEntryOrBuilder getReinitializeFileOrBuilder() {
+       return reinitializeFile_;
+@@ -5320,12 +5524,20 @@ public final class Journal {
+           alluxio.proto.journal.File.ReinitializeFileEntry, alluxio.proto.journal.File.ReinitializeFileEntry.Builder, alluxio.proto.journal.File.ReinitializeFileEntryOrBuilder> reinitializeFileBuilder_;
+       /**
+        * <code>optional .alluxio.proto.journal.ReinitializeFileEntry reinitialize_file = 18;</code>
++       *
++       * <pre>
++       * deprecated, lineage is no longer supported
++       * </pre>
+        */
+       public boolean hasReinitializeFile() {
+         return ((bitField0_ & 0x00800000) == 0x00800000);
+       }
+       /**
+        * <code>optional .alluxio.proto.journal.ReinitializeFileEntry reinitialize_file = 18;</code>
++       *
++       * <pre>
++       * deprecated, lineage is no longer supported
++       * </pre>
+        */
+       public alluxio.proto.journal.File.ReinitializeFileEntry getReinitializeFile() {
+         if (reinitializeFileBuilder_ == null) {
+@@ -5398,6 +5626,10 @@ public final class Journal {
+       }
+       /**
+        * <code>optional .alluxio.proto.journal.ReinitializeFileEntry reinitialize_file = 18;</code>
++       *
++       * <pre>
++       * deprecated, lineage is no longer supported
++       * </pre>
+        */
+       public alluxio.proto.journal.File.ReinitializeFileEntry.Builder getReinitializeFileBuilder() {
+         bitField0_ |= 0x00800000;

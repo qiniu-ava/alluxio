@@ -1,0 +1,7 @@
+diff a/core/server/worker/src/main/java/alluxio/worker/block/AbstractBlockStoreEventListener.java b/core/server/worker/src/main/java/alluxio/worker/block/AbstractBlockStoreEventListener.java	(rejected hunks)
+@@ -42,5 +42,4 @@ public abstract class AbstractBlockStoreEventListener implements BlockStoreEvent
+ 
+   @Override
+   public void onRemoveBlockByWorker(long sessionId, long blockId) {}
+-
+ }

@@ -1,0 +1,85 @@
+diff a/core/common/src/main/java/alluxio/thrift/CreateFileTOptions.java b/core/common/src/main/java/alluxio/thrift/CreateFileTOptions.java	(rejected hunks)
+@@ -45,6 +45,9 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+   private static final org.apache.thrift.protocol.TField MODE_FIELD_DESC = new org.apache.thrift.protocol.TField("mode", org.apache.thrift.protocol.TType.I16, (short)5);
+   private static final org.apache.thrift.protocol.TField TTL_ACTION_NOT_USED_FIELD_DESC = new org.apache.thrift.protocol.TField("ttlActionNotUsed", org.apache.thrift.protocol.TType.I32, (short)6);
+   private static final org.apache.thrift.protocol.TField COMMON_OPTIONS_FIELD_DESC = new org.apache.thrift.protocol.TField("commonOptions", org.apache.thrift.protocol.TType.STRUCT, (short)7);
++  private static final org.apache.thrift.protocol.TField REPLICATION_MAX_FIELD_DESC = new org.apache.thrift.protocol.TField("replicationMax", org.apache.thrift.protocol.TType.I32, (short)8);
++  private static final org.apache.thrift.protocol.TField REPLICATION_MIN_FIELD_DESC = new org.apache.thrift.protocol.TField("replicationMin", org.apache.thrift.protocol.TType.I32, (short)9);
++  private static final org.apache.thrift.protocol.TField REPLICATION_DURABLE_FIELD_DESC = new org.apache.thrift.protocol.TField("replicationDurable", org.apache.thrift.protocol.TType.I32, (short)10);
+ 
+   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
+   static {
+@@ -59,6 +62,9 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+   private short mode; // optional
+   private alluxio.thrift.TTtlAction ttlActionNotUsed; // optional
+   private FileSystemMasterCommonTOptions commonOptions; // optional
++  private int replicationMax; // optional
++  private int replicationMin; // optional
++  private int replicationDurable; // optional
+ 
+   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+@@ -72,7 +78,10 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+      * @see alluxio.thrift.TTtlAction
+      */
+     TTL_ACTION_NOT_USED((short)6, "ttlActionNotUsed"),
+-    COMMON_OPTIONS((short)7, "commonOptions");
++    COMMON_OPTIONS((short)7, "commonOptions"),
++    REPLICATION_MAX((short)8, "replicationMax"),
++    REPLICATION_MIN((short)9, "replicationMin"),
++    REPLICATION_DURABLE((short)10, "replicationDurable");
+ 
+     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+ 
+@@ -101,6 +110,12 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+           return TTL_ACTION_NOT_USED;
+         case 7: // COMMON_OPTIONS
+           return COMMON_OPTIONS;
++        case 8: // REPLICATION_MAX
++          return REPLICATION_MAX;
++        case 9: // REPLICATION_MIN
++          return REPLICATION_MIN;
++        case 10: // REPLICATION_DURABLE
++          return REPLICATION_DURABLE;
+         default:
+           return null;
+       }
+@@ -146,8 +161,11 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+   private static final int __RECURSIVE_ISSET_ID = 2;
+   private static final int __TTLNOTUSED_ISSET_ID = 3;
+   private static final int __MODE_ISSET_ID = 4;
++  private static final int __REPLICATIONMAX_ISSET_ID = 5;
++  private static final int __REPLICATIONMIN_ISSET_ID = 6;
++  private static final int __REPLICATIONDURABLE_ISSET_ID = 7;
+   private byte __isset_bitfield = 0;
+-  private static final _Fields optionals[] = {_Fields.BLOCK_SIZE_BYTES,_Fields.PERSISTED,_Fields.RECURSIVE,_Fields.TTL_NOT_USED,_Fields.MODE,_Fields.TTL_ACTION_NOT_USED,_Fields.COMMON_OPTIONS};
++  private static final _Fields optionals[] = {_Fields.BLOCK_SIZE_BYTES,_Fields.PERSISTED,_Fields.RECURSIVE,_Fields.TTL_NOT_USED,_Fields.MODE,_Fields.TTL_ACTION_NOT_USED,_Fields.COMMON_OPTIONS,_Fields.REPLICATION_MAX,_Fields.REPLICATION_MIN,_Fields.REPLICATION_DURABLE};
+   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+   static {
+     Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+@@ -208,6 +235,12 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+     this.mode = 0;
+     this.ttlActionNotUsed = null;
+     this.commonOptions = null;
++    setReplicationMaxIsSet(false);
++    this.replicationMax = 0;
++    setReplicationMinIsSet(false);
++    this.replicationMin = 0;
++    setReplicationDurableIsSet(false);
++    this.replicationDurable = 0;
+   }
+ 
+   public long getBlockSizeBytes() {
+@@ -490,6 +625,12 @@ public class CreateFileTOptions implements org.apache.thrift.TBase<CreateFileTOp
+       return isSetTtlActionNotUsed();
+     case COMMON_OPTIONS:
+       return isSetCommonOptions();
++    case REPLICATION_MAX:
++      return isSetReplicationMax();
++    case REPLICATION_MIN:
++      return isSetReplicationMin();
++    case REPLICATION_DURABLE:
++      return isSetReplicationDurable();
+     }
+     throw new IllegalStateException();
+   }
