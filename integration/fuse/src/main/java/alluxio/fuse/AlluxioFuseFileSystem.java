@@ -771,7 +771,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
      * the blocks. Usually, file won't be repeatly visited, so this won't impact performance a lot,
      * however, the attr and block cache can be refreshed next time the file is visited. 
      */
-    MetaCache.invalidate(path);
+    //MetaCache.invalidate(path);
 
     try {
       oe.close();
