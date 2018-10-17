@@ -15,7 +15,6 @@ import alluxio.exception.ExceptionMessage;
 import alluxio.util.OSUtils;
 import alluxio.util.io.PathUtils;
 import alluxio.wire.Scope;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
@@ -23,7 +22,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
 import com.sun.management.OperatingSystemMXBean;
 import com.sun.management.UnixOperatingSystemMXBean;
-
 import java.lang.annotation.Annotation;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
@@ -35,7 +33,6 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -791,6 +788,29 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.SERVER)
           .build();
+  public static final PropertyKey UNDERFS_KODO_REQUESTS_MAX =
+      new Builder(Name.UNDERFS_KODO_REQUESTS_MAX)
+          .setDefaultValue(64)
+          .setDescription("The maximum number of kodo connections.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey UNDERFS_KODO_CONNECT_TIMEOUT =
+      new Builder(Name.UNDERFS_KODO_CONNECT_TIMEOUT)
+          .setDefaultValue("50sec")
+          .setDescription("The connect timeout of kodo.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey UNDERFS_KODO_FOLDER_SUFFIX =
+      new Builder(Name.UNDERFS_KODO_FOLDER_SUFFIX)
+          .setDefaultValue("/")
+          .setDescription("The folder suffix of kodo.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+
+
 
   //
   // UFS access control related properties
@@ -889,6 +909,31 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDescription("The configuration to use for the journal operations.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey KODO_ACCESS_KEY =
+      new Builder(Name.KODO_ACCESS_KEY)
+          .setDescription("The access key of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey KODO_SECRET_KEY =
+      new Builder(Name.KODO_SECRET_KEY)
+          .setDescription("The secret key of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .setDisplayType(DisplayType.CREDENTIALS)
+          .build();
+  public static final PropertyKey KODO_DOWNLOAD_HOST =
+      new Builder(Name.KODO_DOWNLOAD_HOST)
+          .setDescription("The Download domain of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey KODO_ENDPOINT =
+      new Builder(Name.KODO_ENDPOINT)
+          .setDescription("The  endpoint of KODO bucket.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
           .build();
 
   //
@@ -3208,6 +3253,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String UNDERFS_S3_THREADS_MAX = "alluxio.underfs.s3.threads.max";
     public static final String UNDERFS_S3_UPLOAD_THREADS_MAX =
         "alluxio.underfs.s3.upload.threads.max";
+    public static final String UNDERFS_KODO_CONNECT_TIMEOUT = "alluxio.underfs.kodo.connect.timeout";
+    public static final String UNDERFS_KODO_REQUESTS_MAX = "alluxio.underfs.kodo.requests.max";
+    public static final String UNDERFS_KODO_FOLDER_SUFFIX = "alluxio.underfs.kodo.folder.suffix";
+
 
     //
     // UFS access control related properties
@@ -3229,6 +3278,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String SWIFT_USER_KEY = "fs.swift.user";
     public static final String SWIFT_USE_PUBLIC_URI_KEY = "fs.swift.use.public.url";
     public static final String SWIFT_REGION_KEY = "fs.swift.region";
+    public static final String KODO_ACCESS_KEY = "fs.kodo.accesskey";
+    public static final String KODO_SECRET_KEY = "fs.kodo.secretkey";
+    public static final String KODO_ENDPOINT = "fs.kodo.endpoint";
+    public static final String KODO_DOWNLOAD_HOST = "fs.kodo.downloadhost";
 
     //
     // Master related properties
