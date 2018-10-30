@@ -3632,7 +3632,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         try {
             // don't go thru journal
             mAsyncPersistHandler.scheduleAsyncPersistence(new AlluxioURI(
-                  getFileInfo(it.next().getValue().getFileId()).getPath()));
+                  getFileInfo(pf.getFileId()).getPath()));
         } catch (FileDoesNotExistException e) {
             DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_FREE, workerId, pf);
             LOG.error("==== EVICT: block {} for {} not found; do free: {}", pf.getBlockIds(), pf.getFileId(), e.getMessage());
