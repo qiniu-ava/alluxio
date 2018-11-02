@@ -53,6 +53,8 @@ import java.nio.file.attribute.PosixFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -115,6 +117,14 @@ public class LocalUnderFileSystem extends BaseUnderFileSystem
     }
     return stream;
   }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(InputStream stream, String path, CreateOptions options) throws IOException {
+    return null;
+  }
+
+  @Override
+  public void createFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts) throws IOException {}
 
   @Override
   public boolean deleteDirectory(String path, DeleteOptions options) throws IOException {

@@ -27,6 +27,7 @@ import com.qiniu.storage.Configuration;
 import com.qiniu.storage.model.FileInfo;
 import com.qiniu.storage.model.FileListing;
 import com.qiniu.util.Auth;
+import com.qiniu.util.StringMap;
 
 import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
@@ -41,6 +42,9 @@ import java.io.OutputStream;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -140,6 +144,28 @@ public class KodoUnderFileSystem extends ObjectUnderFileSystem {
   @Override
   protected OutputStream createObject(String key) throws IOException {
     return new KodoOutputStream(key, mKodoClinet);
+  }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> streamUploader(InputStream stream, String key) {
+    HashMap<Long, ArrayList<String>> uploaderResult = new HashMap<>();
+    try {
+      uploaderResult = mKodoClinet.streamUploader(stream, key);
+      return uploaderResult;
+    } catch (QiniuException e) {
+      LOG.error("StreamUpload object failed key:{}, Msg:{}", key, e);
+    }
+    return null;
+  }
+
+  @Override
+  public void kodoCreateFile(long size, String mime, String key, Map<String, Object> map, ArrayList<String> contexts) {
+    StringMap params = new StringMap(map);
+    try {
+      mKodoClinet.makeFile(size, mime, key, params, contexts);
+    } catch (QiniuException e) {
+      LOG.error("MakeFile failed key:{}, Msg:{}", key, e);
+    }
   }
 
   @Override

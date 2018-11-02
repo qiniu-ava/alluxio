@@ -64,6 +64,8 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.annotation.concurrent.ThreadSafe;
 import javax.annotation.Nullable;
@@ -294,6 +296,15 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
   protected OutputStream createObject(String key) throws IOException {
     return new S3AOutputStream(mBucketName, key, mManager);
   }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> streamUploader(InputStream stream, String key) {
+    return null;
+  }
+
+  @Override
+  public void kodoCreateFile(long size, String mime, String key, Map<String, Object> map, ArrayList<String> contexts) {}
+
 
   @Override
   protected boolean deleteObject(String key) throws IOException {

@@ -241,6 +241,27 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
   }
 
   @Override
+  public HashMap<Long, ArrayList<String>> create(InputStream stream ,String path, CreateOptions options) throws IOException {
+    if (options.getCreateParent() && !mkdirs(getParentPath(path))) {
+      throw new IOException(ExceptionMessage.PARENT_CREATION_FAILED.getMessage(path));
+    }
+    return streamUploader(stream, stripPrefixIfPresent(path));
+  }
+
+  @Override
+  public void createFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts) throws IOException {
+    // Long contextSize = getObjectStatus(path).getContentLength();
+    LOG.info("contexts length {}", contexts == null ? "null" : contexts.size());
+    if (contexts == null) {
+      throw new IOException(ExceptionMessage.File_CREATION_FAILED.getMessage(path));
+    }
+    if (map == null) {
+      map = new HashMap<String, Object>();
+    }
+    kodoCreateFile(size, mime, stripPrefixIfPresent(path), map, contexts);
+  }
+
+  @Override
   public boolean deleteFile(String path) throws IOException {
     return deleteObject(stripPrefixIfPresent(path));
   }
@@ -629,6 +650,9 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
    */
   protected abstract OutputStream createObject(String key) throws IOException;
 
+  protected abstract HashMap<Long, ArrayList<String>> streamUploader(InputStream stream,String key);
+
+  protected abstract void kodoCreateFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts);
   /**
    * Appends the directory suffix to the key.
    *

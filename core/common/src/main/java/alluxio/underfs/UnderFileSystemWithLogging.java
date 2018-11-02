@@ -36,6 +36,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 /**
  * This class forwards all calls to the {@link UnderFileSystem} interface to an internal
@@ -118,6 +120,7 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
     return call(new UfsCallable<OutputStream>() {
       @Override
       public OutputStream call() throws IOException {
+        LOG.info("mUnderFileSystem is {} class", mUnderFileSystem.getClass().getSimpleName());
         return mUnderFileSystem.create(path);
       }
 
@@ -133,6 +136,7 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
     return call(new UfsCallable<OutputStream>() {
       @Override
       public OutputStream call() throws IOException {
+        LOG.info("mUnderFileSystem is {} class", mUnderFileSystem.getClass().getSimpleName());
         return mUnderFileSystem.create(path, options);
       }
 
@@ -141,6 +145,52 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
         return String.format("Create: path=%s, options=%s", path, options);
       }
     });
+  }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(final InputStream stream, final String path) throws IOException {
+    return call(new UfsCallable<HashMap<Long, ArrayList<String>>>() {
+      @Override
+      public HashMap<Long, ArrayList<String>> call() throws IOException {
+        return mUnderFileSystem.create(stream, path);
+      }
+
+      @Override
+      public String toString() {
+        return String.format("Create: path=%s", path);
+      }
+    });
+  }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(final InputStream stream, final String path, CreateOptions options) throws IOException {
+    return call(new UfsCallable<HashMap<Long, ArrayList<String>>>() {
+      @Override
+      public HashMap<Long, ArrayList<String>> call() throws IOException {
+        return mUnderFileSystem.create(stream, path, options);
+      }
+
+      @Override
+      public String toString() {
+        return String.format("Create: path=%s, options=%s", path, options);
+      }
+    });
+  }
+
+  @Override
+  public void createFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts) throws IOException {
+    call(new UfsCallable<Void>() {
+        @Override
+        public Void call() throws IOException {
+          mUnderFileSystem.createFile(size, mime, path, map, contexts);
+          return null;
+        }
+  
+        @Override
+        public String toString() {
+          return String.format("Create: file=%s", path);
+        }
+      });
   }
 
   @Override
