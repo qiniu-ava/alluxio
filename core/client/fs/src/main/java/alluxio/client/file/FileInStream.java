@@ -13,6 +13,7 @@ package alluxio.client.file;
 
 import alluxio.Configuration;
 import alluxio.MetaCache;
+import alluxio.AlluxioURI;
 import alluxio.PropertyKey;
 import alluxio.Seekable;
 import alluxio.annotation.PublicApi;
@@ -21,6 +22,7 @@ import alluxio.client.PositionedReadable;
 import alluxio.client.block.AlluxioBlockStore;
 import alluxio.client.block.stream.BlockInStream;
 import alluxio.client.file.options.InStreamOptions;
+import alluxio.client.file.options.FreeOptions;
 import alluxio.exception.PreconditionMessage;
 import alluxio.exception.status.DeadlineExceededException;
 import alluxio.exception.status.UnavailableException;
@@ -135,6 +137,21 @@ public class FileInStream extends InputStream implements BoundedStream, Position
     return read(b, 0, b.length);
   }
 
+  private void freeCache() {
+    FileSystemMasterClient masterClient = mContext.acquireMasterClient();
+    AlluxioURI uri = MetaCache.getURI(mStatus.getPath());
+    LOG.warn("free alluxio cache because of inconsistent state {}", uri);
+    if (uri != null) {
+      try {
+        masterClient.free(uri, FreeOptions.defaults());
+      } catch (Exception e) {
+        LOG.warn("fail to free {}: {}", uri, e.getMessage());
+      }
+    }
+    mContext.releaseMasterClient(masterClient);
+    MetaCache.invalidate(mStatus.getPath());
+  }
+
   @Override
   public int read(byte[] b, int off, int len) throws IOException {
     Preconditions.checkArgument(b != null, PreconditionMessage.ERR_READ_BUFFER_NULL);
@@ -164,8 +181,14 @@ public class FileInStream extends InputStream implements BoundedStream, Position
         lastException = null;
       } catch (UnavailableException | ConnectException | DeadlineExceededException e) {
         lastException = e;
-        handleRetryableException(mBlockInStream, e);
-        mBlockInStream = null;
+        handleRetryableException(mBlockInStream, lastException);
+        closeBlockInStream(mBlockInStream);
+      } catch (IllegalStateException e) {
+        freeCache();
+        lastException = new IOException(e.getMessage());
+        handleRetryableException(mBlockInStream, lastException);
+        closeBlockInStream(mBlockInStream);
+        break;  // let client side fail this time
       }
     }
     if (lastException != null) {
