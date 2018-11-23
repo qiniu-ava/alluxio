@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @PublicApi
 public interface FileSystem {
 
+  public String getShortCircuitName(String file);
   /**
    * Factory for {@link FileSystem}.
    */

@@ -113,7 +113,8 @@ public final class AlluxioBlockStore {
    */
   public BlockInfo getInfo(long blockId) throws IOException {
     BlockInfo info = MetaCache.getBlockInfoCache(blockId); //qiniu2
-    if (info != null) return info;
+    if (info != null && info.getLocations() != null
+        && info.getLocations().size() > 0) return info;
     try (CloseableResource<BlockMasterClient> masterClientResource =
         mContext.acquireBlockMasterClientResource()) {
       //return masterClientResource.get().getBlockInfo(blockId); -- qiniu2
