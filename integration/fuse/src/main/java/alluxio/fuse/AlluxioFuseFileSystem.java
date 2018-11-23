@@ -81,6 +81,9 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   private static final long GID = AlluxioFuseUtils.getGid(System.getProperty("user.name"));
   private final boolean mIsShellGroupMapping;
 
+  private static final String mSeed = ".tmp.ava.alluxiosc.tmp";
+  private final Map<Long, Long> mSCFiles;
+
   private final FileSystem mFileSystem;
   // base path within Alluxio namespace that is used for FUSE operations
   // For example, if alluxio-fuse is mounted in /mnt/alluxio and mAlluxioRootPath
@@ -176,6 +179,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     mOpenFiles = new HashMap<>();
     mCreateFiles = new HashMap<>();
     mTruncatePaths = new ConcurrentHashMap<>();
+    mSCFiles = new HashMap<>();
 
     //final int maxCachedPaths = Configuration.getInt(PropertyKey.FUSE_CACHED_PATHS_MAX);
     mIsShellGroupMapping = ShellBasedUnixGroupsMapping.class.getName()
@@ -186,6 +190,12 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
 
     Preconditions.checkArgument(mAlluxioRootPath.isAbsolute(),
         "alluxio root path should be absolute");
+  }
+
+  public long getNextId() {
+    synchronized (mOpenFiles) {
+      return mNextOpenFileId++;
+    }
   }
 
   /**
@@ -306,6 +316,10 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     return 0;
   }
 
+  private int flush_sc(String path, FuseFileInfo fi) {
+    return 0;
+  }
+
   /**
    * Flushes cached data on Alluxio.
    *
@@ -317,6 +331,9 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
+    if (path.endsWith(mSeed)) {
+      return flush_sc(path, fi);
+    }
     LOG.trace("flush({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -345,6 +362,24 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     return 0;
   }
 
+  private int getattr_sc(String path, FileStat stat) {
+
+    final long ctime_sec = System.currentTimeMillis() / 1000;
+    final long ctime_nsec = (ctime_sec  % 1000) * 1000;
+
+    stat.st_ctim.tv_sec.set(ctime_sec);
+    stat.st_ctim.tv_nsec.set(ctime_nsec);
+    stat.st_mtim.tv_sec.set(ctime_sec);
+    stat.st_mtim.tv_nsec.set(ctime_nsec);
+
+    stat.st_size.set(512);
+    stat.st_uid.set(UID);
+    stat.st_gid.set(GID);
+    stat.st_mode.set(FileStat.S_IFREG);
+
+    return 0;
+  }
+
   /**
    * Retrieves file attributes.
    *
@@ -354,6 +389,9 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int getattr(String path, FileStat stat) {
+    if (path.endsWith(mSeed)) {
+      return getattr_sc(path, stat);
+    }
     //final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     AlluxioURI turi = MetaCache.getURI(path);
     LOG.trace("getattr({}) [Alluxio: {}]", path, turi);
@@ -463,6 +501,15 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     return 0;
   }
 
+  private int open_sc(String path, FuseFileInfo fi) {
+    long id = getNextId();
+    synchronized(mSCFiles) {
+      mSCFiles.put(id, id);
+    }
+    fi.fh.set(id);
+    return 0;
+  }
+
   /**
    * Opens an existing file for reading.
    *
@@ -474,6 +521,9 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int open(String path, FuseFileInfo fi) {
+    if (path.endsWith(mSeed)) {
+      return open_sc(path, fi);
+    }
     //final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final AlluxioURI uri = MetaCache.getURI(path);
     // (see {@code man 2 open} for the structure of the flags bitfield)
@@ -543,6 +593,15 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       return true;
   }
 
+  private int read_sc(String path, Pointer buf, @size_t long size, @off_t long offset, FuseFileInfo fi) {
+    String file = mFileSystem.getShortCircuitName(
+        path.substring(0, path.length() - mSeed.length()));
+    LOG.info("!!! sc local block: {} for {}", file, path);
+    int nread = file.getBytes().length;  
+    buf.put(0, file.getBytes(), 0, nread);
+    return nread;
+  }
+
   /**
    * Reads data from an open file.
    *
@@ -559,7 +618,10 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int read(String path, Pointer buf, @size_t long size, @off_t long offset,
-      FuseFileInfo fi) {
+    FuseFileInfo fi) {
+    if (path.endsWith(mSeed)) {
+      return read_sc(path, buf, size, offset, fi);
+    }
 
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
@@ -574,51 +636,51 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
 
     CountingRetry retry = new CountingRetry(MAX_WORKERS_TO_RETRY);
     while (true) {
-        synchronized (mOpenFiles) {
-            //oe = mOpenFiles.get(fd);
-            oe = this.get_ofe(path, fd);
-        }
-        if (oe == null) {
-            LOG.error("Cannot find fd for {} in table", path);
-            MetaCache.invalidate(path);
-            return -ErrorCodes.EBADFD();
+      synchronized (mOpenFiles) {
+        //oe = mOpenFiles.get(fd);
+        oe = this.get_ofe(path, fd);
+      }
+      if (oe == null) {
+        LOG.error("Cannot find fd for {} in table", path);
+        MetaCache.invalidate(path);
+        return -ErrorCodes.EBADFD();
+      }
+
+      rd = 0;
+      nread = 0;
+      if (oe.getIn() == null) {
+        LOG.error("{} was not open for reading", path);
+        return -ErrorCodes.EBADFD();
+      }
+      try {
+        oe.getIn().seek(offset);
+        final byte[] dest = new byte[sz];
+        while (rd >= 0 && nread < size) {
+          rd = oe.getIn().read(dest, nread, sz - nread);
+          if (rd >= 0) {
+            nread += rd;
+          }
         }
 
-        rd = 0;
-        nread = 0;
-        if (oe.getIn() == null) {
-            LOG.error("{} was not open for reading", path);
-            return -ErrorCodes.EBADFD();
+        if (nread == -1) { // EOF
+          nread = 0;
+        } else if (nread > 0) {
+          buf.put(0, dest, 0, nread);
         }
-        try {
-            oe.getIn().seek(offset);
-            final byte[] dest = new byte[sz];
-            while (rd >= 0 && nread < size) {
-                rd = oe.getIn().read(dest, nread, sz - nread);
-                if (rd >= 0) {
-                    nread += rd;
-                }
-            }
-
-            if (nread == -1) { // EOF
-                nread = 0;
-            } else if (nread > 0) {
-                buf.put(0, dest, 0, nread);
-            }
-            break;  //qiniu
-        } catch (IOException e) {
-            MetaCache.invalidate(path);
-            LOG.error("IOException while reading from {}.", path, e);
-            if (handleRetryableException(path, fd, e) && retry.attempt()) {
-                LOG.info("=== retrying {}: path:{} fd:{}", retry.getAttemptCount(), path, fd);
-                continue;
-            } 
-            return -ErrorCodes.EIO();
-        } catch (Throwable e) {
-            MetaCache.invalidate(path);
-            LOG.error("Unexpected exception on {}", path, e);
-            return -ErrorCodes.EFAULT();
-        }
+        break;  //qiniu
+      } catch (IOException e) {
+        MetaCache.invalidate(path);
+        LOG.error("IOException while reading from {}.", path, e);
+        if (handleRetryableException(path, fd, e) && retry.attempt()) {
+          LOG.info("=== retrying {}: path:{} fd:{}", retry.getAttemptCount(), path, fd);
+          continue;
+        } 
+        return -ErrorCodes.EIO();
+      } catch (Throwable e) {
+        MetaCache.invalidate(path);
+        LOG.error("Unexpected exception on {}", path, e);
+        return -ErrorCodes.EFAULT();
+      }
     }
 
     return nread;
@@ -742,6 +804,13 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     return 0;
   }
 
+  private int release_sc(String path, FuseFileInfo fi) {
+    synchronized(mSCFiles) {
+      mSCFiles.remove(fi.fh.get());
+    }
+    return 0;
+  }
+
   /**
    * Releases the resources associated to an open file.
    *
@@ -754,6 +823,9 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
+    if (path.endsWith(mSeed)) {
+      return release_sc(path, fi);
+    }
     LOG.trace("release({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;

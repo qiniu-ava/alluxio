@@ -29,6 +29,7 @@ import alluxio.client.file.options.OutStreamOptions;
 import alluxio.client.file.options.RenameOptions;
 import alluxio.client.file.options.SetAttributeOptions;
 import alluxio.client.file.options.UnmountOptions;
+import alluxio.client.block.BlockMasterClient;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.DirectoryNotEmptyException;
 import alluxio.exception.ExceptionMessage;
@@ -46,6 +47,24 @@ import alluxio.wire.CommonOptions;
 import alluxio.wire.FileBlockInfo;
 import alluxio.wire.LoadMetadataType;
 import alluxio.wire.MountPointInfo;
+import alluxio.client.file.FileSystemMasterClient;
+import alluxio.client.file.URIStatus;
+import alluxio.wire.TieredIdentity;
+import alluxio.wire.WorkerNetAddress;
+import alluxio.proto.dataserver.Protocol;
+import alluxio.util.proto.ProtoMessage;
+import alluxio.network.netty.NettyRPC;
+import alluxio.network.netty.NettyRPCContext;
+import alluxio.network.TieredIdentityFactory;
+import alluxio.wire.BlockLocation;
+import alluxio.resource.CloseableResource;
+
+import java.util.concurrent.ExecutorService;
+import java.util.Optional;
+import io.netty.channel.Channel;
+import com.google.common.base.Preconditions;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,6 +86,70 @@ public class BaseFileSystem implements FileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(BaseFileSystem.class);
 
   protected final FileSystemContext mFileSystemContext;
+  private final String NON_EXIST_FILE = "";
+
+  @Override
+  public String getShortCircuitName(String file) {
+    String localFile = "null";
+    try {
+      URIStatus status = getStatus(new AlluxioURI(file));
+      if (status.getLength() > status.getBlockSizeBytes()) {
+        LOG.info("!!! multiple blocks {}", file);
+        return localFile;
+      }
+      List<Long> ids = status.getBlockIds();
+      if (ids == null || ids.size() != 1) {
+        LOG.info("!!! invalid ids {}", ids);
+        return localFile;
+      }
+      long id = ids.get(0);
+      BlockInfo info = getBlockInfo(id);
+      if (info == null) {
+        LOG.info("!!! invalid info {}", info);
+        return localFile;
+      }
+      List<BlockLocation> locations = info.getLocations();
+      if (locations == null) {
+        LOG.warn("!!! fifo invalid locations {}", file);
+        return localFile;
+      }
+      List<TieredIdentity> tieredLocations =
+        locations.stream().map(location -> location.getWorkerAddress().getTieredIdentity())
+        .collect(toList());
+      TieredIdentity tier = TieredIdentityFactory.localIdentity();
+      Optional<TieredIdentity> nearest = tier.nearest(tieredLocations);
+      if (nearest.isPresent()) {
+        WorkerNetAddress worker = locations.stream().map(BlockLocation::getWorkerAddress)
+          .filter(addr -> addr.getTieredIdentity().equals(nearest.get())).findFirst().get();
+        LOG.debug("!!! worker {}", worker);
+        Channel mChannel = mFileSystemContext.acquireNettyChannel(worker);
+        Protocol.LocalBlockOpenRequest request =
+          Protocol.LocalBlockOpenRequest.newBuilder().setBlockId(id).build();
+        ProtoMessage message = NettyRPC
+          .call(NettyRPCContext.defaults().setChannel(mChannel).setTimeout(60),
+              new ProtoMessage(request));
+        Preconditions.checkState(message.isLocalBlockOpenResponse());
+        localFile = message.asLocalBlockOpenResponse().getPath();
+        LOG.debug("!!! local path {} for {}", localFile, file);
+      }
+    } catch (Exception e) {
+      LOG.error("!!! " + e.getMessage());
+    }
+
+    return localFile;
+  }
+
+  public BlockInfo getBlockInfo(long blockId) throws IOException {
+    BlockInfo info = MetaCache.getBlockInfoCache(blockId);
+    if (info != null && info.getLocations() != null
+        && info.getLocations().size() > 0) return info;
+    try (CloseableResource<BlockMasterClient> masterClientResource =
+        mFileSystemContext.acquireBlockMasterClientResource()) {
+      info = masterClientResource.get().getBlockInfo(blockId);
+      if (info != null) MetaCache.addBlockInfoCache(blockId, info);
+      return info;
+    }
+  }
 
   /**
    * @param context file system context

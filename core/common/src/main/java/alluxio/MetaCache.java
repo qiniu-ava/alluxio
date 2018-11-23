@@ -176,8 +176,8 @@ public class MetaCache {
   }
 
   public static void setStatus(String path, URIStatus s) {
-    if (!attr_cache_enabled || s.isFolder() || s.getBlockSizeBytes() == 0
-        || s.getLength() == 0 || s.getInAlluxioPercentage() != 100) return;
+    /*if (!attr_cache_enabled || s.isFolder() || s.getBlockSizeBytes() == 0
+        || s.getLength() == 0 || s.getInAlluxioPercentage() != 100) return; */
 
     path = resolve(path);
     MetaCacheData c = fcache.getUnchecked(path);
