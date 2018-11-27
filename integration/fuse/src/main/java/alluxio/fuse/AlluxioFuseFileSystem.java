@@ -82,7 +82,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   private final boolean mIsShellGroupMapping;
 
   private static final String mSeed = ".tmp.ava.alluxiosc.tmp";
-  private final Map<Long, Long> mSCFiles;
+  private final Map<Long, FileSystem.ShortCircuitInfo> mSCFiles;
 
   private final FileSystem mFileSystem;
   // base path within Alluxio namespace that is used for FUSE operations
@@ -504,7 +504,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   private int open_sc(String path, FuseFileInfo fi) {
     long id = getNextId();
     synchronized(mSCFiles) {
-      mSCFiles.put(id, id);
+      mSCFiles.put(id, FileSystem.ShortCircuitInfo.dummy());
     }
     fi.fh.set(id);
     return 0;
@@ -594,11 +594,14 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   }
 
   private int read_sc(String path, Pointer buf, @size_t long size, @off_t long offset, FuseFileInfo fi) {
-    String file = mFileSystem.getShortCircuitName(
+    FileSystem.ShortCircuitInfo info = mFileSystem.acquireShortCircuitInfo(
         path.substring(0, path.length() - mSeed.length()));
-    LOG.info("!!! sc local block: {} for {}", file, path);
-    int nread = file.getBytes().length;  
-    buf.put(0, file.getBytes(), 0, nread);
+    synchronized(mSCFiles) {
+      mSCFiles.put(fi.fh.get(), info);
+    }
+    LOG.debug("!!! sc local block: {} for {}", info.file(), path);
+    int nread = info.file().getBytes().length;  
+    buf.put(0, info.file().getBytes(), 0, nread);
     return nread;
   }
 
@@ -805,8 +808,12 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   }
 
   private int release_sc(String path, FuseFileInfo fi) {
+    FileSystem.ShortCircuitInfo info = null;
     synchronized(mSCFiles) {
-      mSCFiles.remove(fi.fh.get());
+      info = mSCFiles.remove(fi.fh.get());
+    }
+    if (info != null && info.worker() != null) {
+      mFileSystem.releaseShortCircuitInfo(info);
     }
     return 0;
   }

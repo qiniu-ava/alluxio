@@ -37,6 +37,7 @@ import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
 import alluxio.wire.MountPointInfo;
+import alluxio.wire.WorkerNetAddress;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,8 +58,47 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @PublicApi
 public interface FileSystem {
+  public class ShortCircuitInfo {
+    public WorkerNetAddress mWorker;
+    public String mFile;
+    public long mId;
 
-  public String getShortCircuitName(String file);
+    public ShortCircuitInfo(WorkerNetAddress worker, String file, long id) {
+      mWorker = worker;
+      mFile = file;
+      mId = id;
+    }
+
+    public WorkerNetAddress worker() {
+      return mWorker;
+    }
+    public void worker(WorkerNetAddress w) {
+      mWorker = w;
+    }
+
+    public String file() {
+      return mFile;
+    }
+    public void file(String f) {
+      mFile = f;
+    }
+
+    public long id() {
+      return mId;
+    }
+    public void id(long i) {
+      mId = i;
+    }
+
+    public static ShortCircuitInfo dummy() {
+      return new ShortCircuitInfo(null, "null", 0);
+    }
+  }
+
+  public ShortCircuitInfo acquireShortCircuitInfo(String file);
+
+  public void releaseShortCircuitInfo(ShortCircuitInfo info);
+
   /**
    * Factory for {@link FileSystem}.
    */
