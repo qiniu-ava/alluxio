@@ -11,6 +11,9 @@
 
 package alluxio.client.file;
 
+import alluxio.Configuration;
+import alluxio.PropertyKey;
+import alluxio.Constants;
 import alluxio.AlluxioURI;
 import alluxio.MetaCache;
 import alluxio.annotation.PublicApi;
@@ -86,57 +89,86 @@ public class BaseFileSystem implements FileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(BaseFileSystem.class);
 
   protected final FileSystemContext mFileSystemContext;
-  private final String NON_EXIST_FILE = "";
+  TieredIdentity mLocalTier = TieredIdentityFactory.localIdentity();
+  private static final long READ_TIMEOUT_MS =
+      Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_TIMEOUT_MS);
 
   @Override
-  public String getShortCircuitName(String file) {
-    String localFile = "null";
+  public void releaseShortCircuitInfo(FileSystem.ShortCircuitInfo info) {
+    if (info.worker() == null || info.file().equals("null")) {
+      return;
+    }
+    Channel channel = null;
+    Protocol.LocalBlockCloseRequest request =
+      Protocol.LocalBlockCloseRequest.newBuilder().setBlockId(info.id()).build();
+    try {
+      channel = mFileSystemContext.acquireNettyChannel(info.worker());
+      NettyRPC.call(NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS),
+          new ProtoMessage(request));
+    } catch (java.io.IOException e) {
+      LOG.error("!!! error closing netty channel for short circuit {}", e.getMessage());
+    } finally {
+      if (channel != null) {
+        mFileSystemContext.releaseNettyChannel(info.worker(), channel);
+      }
+    }
+  }
+
+  @Override
+  public FileSystem.ShortCircuitInfo acquireShortCircuitInfo(String file) {
+    Channel channel = null;
+    FileSystem.ShortCircuitInfo info = FileSystem.ShortCircuitInfo.dummy();
+
     try {
       URIStatus status = getStatus(new AlluxioURI(file));
       if (status.getLength() > status.getBlockSizeBytes()) {
         LOG.info("!!! multiple blocks {}", file);
-        return localFile;
+        return info;
       }
       List<Long> ids = status.getBlockIds();
       if (ids == null || ids.size() != 1) {
         LOG.info("!!! invalid ids {}", ids);
-        return localFile;
+        return info;
       }
-      long id = ids.get(0);
-      BlockInfo info = getBlockInfo(id);
-      if (info == null) {
-        LOG.info("!!! invalid info {}", info);
-        return localFile;
+      info.id(ids.get(0));
+      BlockInfo binfo = getBlockInfo(info.id());
+      if (binfo == null) {
+        LOG.info("!!! invalid info {}", binfo);
+        return info;
       }
-      List<BlockLocation> locations = info.getLocations();
+      List<BlockLocation> locations = binfo.getLocations();
       if (locations == null) {
         LOG.warn("!!! fifo invalid locations {}", file);
-        return localFile;
+        return info;
       }
       List<TieredIdentity> tieredLocations =
         locations.stream().map(location -> location.getWorkerAddress().getTieredIdentity())
         .collect(toList());
-      TieredIdentity tier = TieredIdentityFactory.localIdentity();
-      Optional<TieredIdentity> nearest = tier.nearest(tieredLocations);
-      if (nearest.isPresent()) {
-        WorkerNetAddress worker = locations.stream().map(BlockLocation::getWorkerAddress)
-          .filter(addr -> addr.getTieredIdentity().equals(nearest.get())).findFirst().get();
-        LOG.debug("!!! worker {}", worker);
-        Channel mChannel = mFileSystemContext.acquireNettyChannel(worker);
+      Optional<TieredIdentity> nearest = mLocalTier.nearest(tieredLocations);
+      if (nearest.isPresent() && mLocalTier.getTier(0).getTierName().equals(Constants.LOCALITY_NODE)
+            && mLocalTier.topTiersMatch(nearest.get())) {
+        info.worker(locations.stream().map(BlockLocation::getWorkerAddress)
+          .filter(addr -> addr.getTieredIdentity().equals(nearest.get())).findFirst().get());
+        LOG.debug("!!! worker {}", info.worker());
+        channel = mFileSystemContext.acquireNettyChannel(info.worker());
         Protocol.LocalBlockOpenRequest request =
-          Protocol.LocalBlockOpenRequest.newBuilder().setBlockId(id).build();
+          Protocol.LocalBlockOpenRequest.newBuilder().setBlockId(info.id()).build();
         ProtoMessage message = NettyRPC
-          .call(NettyRPCContext.defaults().setChannel(mChannel).setTimeout(60),
+          .call(NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS),
               new ProtoMessage(request));
         Preconditions.checkState(message.isLocalBlockOpenResponse());
-        localFile = message.asLocalBlockOpenResponse().getPath();
-        LOG.debug("!!! local path {} for {}", localFile, file);
+        info.file(message.asLocalBlockOpenResponse().getPath());
+        LOG.debug("!!! local path {} for {}", info.file(), file);
       }
-    } catch (Exception e) {
+    } catch (Exception e) { 
       LOG.error("!!! " + e.getMessage());
+    } finally {
+      if (info.worker() != null && channel != null) {
+        mFileSystemContext.releaseNettyChannel(info.worker(), channel);
+      }
     }
 
-    return localFile;
+    return info;
   }
 
   public BlockInfo getBlockInfo(long blockId) throws IOException {
