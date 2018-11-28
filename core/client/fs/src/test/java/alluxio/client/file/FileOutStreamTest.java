@@ -405,7 +405,7 @@ public class FileOutStreamTest {
         OutStreamOptions.defaults().setLocationPolicy(new FileWriteLocationPolicy() {
           @Override
           public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList,
-              long blockSizeBytes) {
+              long blockSizeBytes, WorkerNetAddress.WorkerRole role) {
             return null;
           }
         }).setWriteType(WriteType.CACHE_THROUGH);

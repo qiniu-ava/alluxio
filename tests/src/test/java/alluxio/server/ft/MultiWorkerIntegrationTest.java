@@ -159,7 +159,7 @@ public final class MultiWorkerIntegrationTest extends BaseIntegrationTest {
     FileSystemTestUtils.createByteFile(mResource.get().getClient(), filePath,
         CreateFileOptions.defaults()
             .setWriteType(WriteType.MUST_CACHE)
-            .setLocationPolicy((workerInfoList, blockSizeBytes) ->
+            .setLocationPolicy((workerInfoList, blockSizeBytes, role) ->
                 StreamSupport.stream(workerInfoList.spliterator(), false)
                     .filter(x -> x.getNetAddress().equals(address))
                     .findFirst()

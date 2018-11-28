@@ -41,7 +41,7 @@ public final class SpecificHostPolicy implements FileWriteLocationPolicy, BlockL
 
   @Override
   public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList,
-      long blockSizeBytes) {
+      long blockSizeBytes, WorkerNetAddress.WorkerRole role) {
     // find the first worker matching the host name
     for (BlockWorkerInfo info : workerInfoList) {
       if (info.getNetAddress().getHost().equals(mHostname)) {
@@ -53,7 +53,7 @@ public final class SpecificHostPolicy implements FileWriteLocationPolicy, BlockL
 
   @Override
   public WorkerNetAddress getWorker(GetWorkerOptions options) {
-    return getWorkerForNextBlock(options.getBlockWorkerInfos(), options.getBlockSize());
+    return getWorkerForNextBlock(options.getBlockWorkerInfos(), options.getBlockSize(), options.getRole());
   }
 
   @Override

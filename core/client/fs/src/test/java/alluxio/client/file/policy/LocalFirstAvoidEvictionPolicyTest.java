@@ -44,7 +44,7 @@ public class LocalFirstAvoidEvictionPolicyTest {
     // local rack with enough availability
     policy = new LocalFirstAvoidEvictionPolicy(
         TieredIdentityFactory.fromString("node=node2,rack=rack3"));
-    chosen = policy.getWorkerForNextBlock(workers, Constants.GB);
+    chosen = policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL);
     assertEquals("node4", chosen.getTieredIdentity().getTier(0).getValue());
   }
 
@@ -58,7 +58,7 @@ public class LocalFirstAvoidEvictionPolicyTest {
     List<BlockWorkerInfo> workers = new ArrayList<>();
     workers.add(worker(Constants.GB, 0, "worker1", ""));
     workers.add(worker(Constants.MB, Constants.MB, localhostName, ""));
-    assertEquals("worker1", policy.getWorkerForNextBlock(workers, Constants.MB).getHost());
+    assertEquals("worker1", policy.getWorkerForNextBlock(workers, Constants.MB, WorkerNetAddress.WorkerRole.ALL).getHost());
   }
 
   /**
@@ -72,7 +72,7 @@ public class LocalFirstAvoidEvictionPolicyTest {
     workers.add(worker(Constants.GB, Constants.MB, "worker1", ""));
     workers.add(worker(Constants.GB, Constants.MB, localhostName, ""));
     assertEquals(localhostName,
-        policy.getWorkerForNextBlock(workers, Constants.GB).getHost());
+        policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL).getHost());
   }
 
   @Test

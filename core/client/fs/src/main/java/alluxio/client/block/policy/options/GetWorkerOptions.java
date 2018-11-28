@@ -13,6 +13,7 @@ package alluxio.client.block.policy.options;
 
 import alluxio.annotation.PublicApi;
 import alluxio.client.block.BlockWorkerInfo;
+import alluxio.wire.WorkerNetAddress.WorkerRole;
 
 import com.google.common.base.Objects;
 
@@ -28,6 +29,7 @@ public final class GetWorkerOptions {
   // TODO(calvin): Replace with BlockInfo
   private long mBlockId;
   private long mBlockSize;
+  private WorkerRole mRole;
 
   /**
    * @return the default {@link GetWorkerOptions}
@@ -39,7 +41,9 @@ public final class GetWorkerOptions {
   /**
    * Creates a new instance with defaults.
    */
-  private GetWorkerOptions() {}
+  private GetWorkerOptions() {
+    mRole = WorkerRole.ALL;
+  }
 
   /**
    * @return the list of block worker infos
@@ -60,6 +64,10 @@ public final class GetWorkerOptions {
    */
   public long getBlockSize() {
     return mBlockSize;
+  }
+
+  public WorkerRole getRole() {
+    return mRole;
   }
 
   /**
@@ -90,6 +98,11 @@ public final class GetWorkerOptions {
     return this;
   }
 
+  public GetWorkerOptions setRole(WorkerRole role) {
+    mRole = role;
+    return this;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -101,12 +114,13 @@ public final class GetWorkerOptions {
     GetWorkerOptions that = (GetWorkerOptions) o;
     return Objects.equal(mBlockWorkerInfos, that.mBlockWorkerInfos)
         && Objects.equal(mBlockId, that.mBlockId)
-        && Objects.equal(mBlockSize, that.getBlockSize());
+        && Objects.equal(mBlockSize, that.getBlockSize())
+        && Objects.equal(mRole, that.getRole());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(mBlockWorkerInfos, mBlockId, mBlockSize);
+    return Objects.hashCode(mBlockWorkerInfos, mBlockId, mBlockSize, mRole);
   }
 
   @Override
@@ -115,6 +129,7 @@ public final class GetWorkerOptions {
         .add("blockId", mBlockId)
         .add("blockSize", mBlockSize)
         .add("blockWorkerInfos", mBlockWorkerInfos)
+        .add("role", mRole)
         .toString();
   }
 }

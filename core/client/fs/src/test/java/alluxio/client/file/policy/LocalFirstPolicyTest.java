@@ -43,7 +43,7 @@ public final class LocalFirstPolicyTest {
     List<BlockWorkerInfo> workers = new ArrayList<>();
     workers.add(worker(Constants.GB, "worker1", ""));
     workers.add(worker(Constants.GB, localhostName, ""));
-    assertEquals(localhostName, policy.getWorkerForNextBlock(workers, Constants.MB).getHost());
+    assertEquals(localhostName, policy.getWorkerForNextBlock(workers, Constants.MB, WorkerNetAddress.WorkerRole.ALL).getHost());
   }
 
   /**
@@ -56,7 +56,7 @@ public final class LocalFirstPolicyTest {
     List<BlockWorkerInfo> workers = new ArrayList<>();
     workers.add(worker(Constants.GB, "worker1", ""));
     workers.add(worker(Constants.MB, localhostName, ""));
-    assertEquals("worker1", policy.getWorkerForNextBlock(workers, Constants.GB).getHost());
+    assertEquals("worker1", policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL).getHost());
   }
 
   /**
@@ -71,8 +71,8 @@ public final class LocalFirstPolicyTest {
 
     boolean success = false;
     for (int i = 0; i < 100; i++) {
-      String host = policy.getWorkerForNextBlock(workers, Constants.GB).getHost();
-      if (!host.equals(policy.getWorkerForNextBlock(workers, Constants.GB).getHost())) {
+      String host = policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL).getHost();
+      if (!host.equals(policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL).getHost())) {
         success = true;
         break;
       }
@@ -90,12 +90,12 @@ public final class LocalFirstPolicyTest {
     WorkerNetAddress chosen;
     // local rack
     policy = LocalFirstPolicy.create(TieredIdentityFactory.fromString("node=node1,rack=rack2"));
-    chosen = policy.getWorkerForNextBlock(workers, Constants.GB);
+    chosen = policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL);
     assertEquals("rack2", chosen.getTieredIdentity().getTier(1).getValue());
 
     // local node
     policy = LocalFirstPolicy.create(TieredIdentityFactory.fromString("node=node4,rack=rack3"));
-    chosen = policy.getWorkerForNextBlock(workers, Constants.GB);
+    chosen = policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL);
     assertEquals("node4", chosen.getTieredIdentity().getTier(0).getValue());
   }
 
@@ -109,7 +109,7 @@ public final class LocalFirstPolicyTest {
     workers.add(worker(Constants.GB, "node4", "rack3"));
     LocalFirstPolicy policy =
         LocalFirstPolicy.create(TieredIdentityFactory.fromString("node=node2,rack=rack3"));
-    WorkerNetAddress chosen = policy.getWorkerForNextBlock(workers, Constants.GB);
+    WorkerNetAddress chosen = policy.getWorkerForNextBlock(workers, Constants.GB, WorkerNetAddress.WorkerRole.ALL);
     assertEquals(workers.get(2).getNetAddress(), chosen);
   }
 
