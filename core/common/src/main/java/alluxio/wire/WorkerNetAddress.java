@@ -32,6 +32,7 @@ public final class WorkerNetAddress implements Serializable {
   private static final long serialVersionUID = 5822347646342091434L;
 
   private String mHost = "";
+  private WorkerRole mRole;
   private int mRpcPort;
   private int mDataPort;
   private int mWebPort;
@@ -86,6 +87,10 @@ public final class WorkerNetAddress implements Serializable {
       return mTieredIdentity;
     }
     return new TieredIdentity(Arrays.asList(new LocalityTier(Constants.LOCALITY_NODE, mHost)));
+  }
+
+  public WorkerRole getRole() {
+    return mRole;
   }
 
   /**
@@ -143,6 +148,11 @@ public final class WorkerNetAddress implements Serializable {
     return this;
   }
 
+  public WorkerNetAddress setRole(WorkerRole role) {
+    mRole = role;
+    return this;
+  }
+
   /**
    * @return a net address of thrift construct
    */
@@ -155,6 +165,9 @@ public final class WorkerNetAddress implements Serializable {
     address.setDomainSocketPath(mDomainSocketPath);
     if (mTieredIdentity != null) {
       address.setTieredIdentity(mTieredIdentity.toThrift());
+    }
+    if (mRole != null) {
+      address.setRole(mRole.toThrift());
     }
     return address;
   }
@@ -173,13 +186,18 @@ public final class WorkerNetAddress implements Serializable {
       tieredIdentity = new TieredIdentity(
           Arrays.asList(new LocalityTier(Constants.LOCALITY_NODE, address.getHost())));
     }
+    WorkerRole role = WorkerRole.fromThrift(address.getRole());
+    if (role == null) {
+      role = WorkerRole.ALL;
+    }
     return new WorkerNetAddress()
         .setDataPort(address.getDataPort())
         .setDomainSocketPath(address.getDomainSocketPath())
         .setHost(address.getHost())
         .setRpcPort(address.getRpcPort())
         .setTieredIdentity(tieredIdentity)
-        .setWebPort(address.getWebPort());
+        .setWebPort(address.getWebPort())
+        .setRole(role);
   }
 
   @Override
@@ -196,13 +214,14 @@ public final class WorkerNetAddress implements Serializable {
         && mDataPort == that.mDataPort
         && mWebPort == that.mWebPort
         && mDomainSocketPath.equals(that.mDomainSocketPath)
-        && Objects.equal(mTieredIdentity, that.mTieredIdentity);
+        && Objects.equal(mTieredIdentity, that.mTieredIdentity)
+        && mRole.name().equals(that.mRole.name());
   }
 
   @Override
   public int hashCode() {
     return Objects.hashCode(mHost, mDataPort, mRpcPort, mWebPort, mDomainSocketPath,
-        mTieredIdentity);
+        mTieredIdentity, mRole);
   }
 
   @Override
@@ -214,6 +233,47 @@ public final class WorkerNetAddress implements Serializable {
         .add("webPort", mWebPort)
         .add("domainSocketPath", mDomainSocketPath)
         .add("tieredIdentity", mTieredIdentity)
+        .add("role", mRole.name())
         .toString();
+  }
+
+  public static enum WorkerRole {
+    ALL,
+    READ,
+    WRITE;
+
+    public boolean equals(WorkerRole that) {
+      return this.name().equals(that.name());
+    }
+
+    public alluxio.thrift.WorkerRole toThrift() {
+      switch(name()) {
+        case "ALL":
+          return alluxio.thrift.WorkerRole.findByValue(0);
+        case "READ":
+          return alluxio.thrift.WorkerRole.findByValue(1);
+        case "WRITE":
+          return alluxio.thrift.WorkerRole.findByValue(2);
+        default:
+          return alluxio.thrift.WorkerRole.findByValue(0);
+      }
+    }
+
+    public static WorkerRole fromThrift(alluxio.thrift.WorkerRole field) {
+      if (field == null) {
+        return null;
+      }
+
+      switch(field.getValue()) {
+        case 0:
+          return WorkerRole.ALL;
+        case 1:
+          return WorkerRole.READ;
+        case 2:
+          return WorkerRole.WRITE;
+        default:
+          return WorkerRole.ALL;
+      }
+    }
   }
 }

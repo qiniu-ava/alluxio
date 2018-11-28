@@ -67,6 +67,12 @@ struct TieredIdentity {
   1: list<LocalityTier> tiers
 }
 
+enum WorkerRole {
+  ALL = 0,
+  READ = 1,
+  WRITE = 2,
+}
+
 /**
  * Address information about masters.
  */
@@ -85,6 +91,7 @@ struct WorkerNetAddress {
   4: i32 webPort
   5: string domainSocketPath
   6: TieredIdentity tieredIdentity
+  7: WorkerRole role
 }
 
 struct GetServiceVersionTResponse {

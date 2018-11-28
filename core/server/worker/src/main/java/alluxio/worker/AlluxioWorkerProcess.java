@@ -103,6 +103,9 @@ public final class AlluxioWorkerProcess implements WorkerProcess {
   /** The address for the rpc server. */
   private InetSocketAddress mRpcAddress;
 
+  /** Worker role */
+  private WorkerNetAddress.WorkerRole mRole;
+
   /** Worker start time in milliseconds. */
   private long mStartTimeMs;
 
@@ -153,6 +156,8 @@ public final class AlluxioWorkerProcess implements WorkerProcess {
       String rpcHost = ThriftUtils.getThriftSocket(mThriftServerSocket).getInetAddress()
           .getHostAddress();
       mRpcAddress = new InetSocketAddress(rpcHost, rpcPort);
+      mRole = WorkerNetAddress.WorkerRole.valueOf(Configuration.get(PropertyKey.WORKER_ROLE).toUpperCase());
+      LOG.info("get worker role: {}", mRole.name());
       mThriftServer = createThriftServer();
 
       // Setup Data server
@@ -283,6 +288,8 @@ public final class AlluxioWorkerProcess implements WorkerProcess {
   }
 
   private void startWorkers() throws Exception {
+    LOG.info("trying to register with address info: {}", getAddress());
+    LOG.info("address to thrift: {}", getAddress().toThrift());
     mRegistry.start(getAddress());
   }
 
@@ -389,6 +396,7 @@ public final class AlluxioWorkerProcess implements WorkerProcess {
         .setDataPort(getDataLocalPort())
         .setDomainSocketPath(getDataDomainSocketPath())
         .setWebPort(mWebServer.getLocalPort())
+        .setRole(mRole)
         .setTieredIdentity(mTieredIdentitiy);
   }
 

@@ -21,6 +21,9 @@ import alluxio.wire.WorkerNetAddress;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,7 +41,8 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 // TODO(peis): Move the BlockLocationPolicy implementation to alluxio.client.block.policy.
 @ThreadSafe
-public final class LocalFirstPolicy implements FileWriteLocationPolicy, BlockLocationPolicy {
+public final class LocalFirstPolicy implements FileWriteWithRoleLocationPolicy, BlockLocationPolicy {
+  private static final Logger LOG = LoggerFactory.getLogger(LocalFirstPolicy.class);
   private final TieredIdentity mTieredIdentity;
 
   private static List<String> writerHosts = null;
@@ -67,17 +71,45 @@ public final class LocalFirstPolicy implements FileWriteLocationPolicy, BlockLoc
     return new LocalFirstPolicy(localTieredIdentity);
   }
 
+  static boolean workerFilter(BlockWorkerInfo w, WorkerNetAddress.WorkerRole role) {
+    WorkerNetAddress.WorkerRole workerRole = w.getNetAddress().getRole();
+    if (role != null) {
+      if (role.equals(WorkerNetAddress.WorkerRole.ALL) || role.equals(workerRole)) {
+        return true;
+      }
+    }
+
+    return writerHosts.contains(w.getNetAddress().getHost() + ":" + w.getNetAddress().getDataPort());
+  }
+
+  @Override
+  @Nullable
+  public WorkerNetAddress getWorkerForNextBlock(GetWorkerOptions options) {
+    Iterable<BlockWorkerInfo> workerInfoList = options.getBlockWorkerInfos();
+    long blockSizeBytes = options.getBlockSize();
+    List<BlockWorkerInfo> shuffledWorkers = Lists.newArrayList(workerInfoList);
+    List<BlockWorkerInfo> candidateWorkers = shuffledWorkers.stream()
+      .filter(w -> LocalFirstPolicy.workerFilter(w, options.getRole()))
+      .collect(Collectors.toList());
+    WorkerNetAddress worker = getWorkerForNextBlockImpl(candidateWorkers, blockSizeBytes);
+    if (worker != null) return worker;
+    return getWorkerForNextBlockImpl(workerInfoList, blockSizeBytes);
+  }
+
   /**
    * If configured, write goes to specified workers unless there is none satisified.  - qiniu
    */
   @Override
   @Nullable
-  public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList, long blockSizeBytes) {
+  public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList, long blockSizeBytes, WorkerNetAddress.WorkerRole role) {
     List<BlockWorkerInfo> shuffledWorkers = Lists.newArrayList(workerInfoList);
+    LOG.info("shuffledWorkers in getWorkerForNextBlock: {}", shuffledWorkers);
     List<BlockWorkerInfo> candidateWorkers = shuffledWorkers.stream()
-        .filter(w -> writerHosts.contains(w.getNetAddress().getHost() + ":" + w.getNetAddress().getDataPort()))
-        .collect(Collectors.toList());
+      .filter(w -> LocalFirstPolicy.workerFilter(w, role))
+      .collect(Collectors.toList());
+    LOG.info("candidateWorkers in getWorkerForNextBlock: {}", candidateWorkers);
     WorkerNetAddress worker = getWorkerForNextBlockImpl(candidateWorkers, blockSizeBytes);
+    LOG.info("worker in getWorkerForNextBlock: {}", worker);
     if (worker != null) return worker;
     return getWorkerForNextBlockImpl(workerInfoList, blockSizeBytes);
   }
@@ -109,7 +141,7 @@ public final class LocalFirstPolicy implements FileWriteLocationPolicy, BlockLoc
 
   @Override
   public WorkerNetAddress getWorker(GetWorkerOptions options) {
-    return getWorkerForNextBlock(options.getBlockWorkerInfos(), options.getBlockSize());
+    return getWorkerForNextBlock(options);
   }
 
   @Override

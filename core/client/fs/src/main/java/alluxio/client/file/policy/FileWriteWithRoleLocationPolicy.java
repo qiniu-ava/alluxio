@@ -34,14 +34,6 @@ import alluxio.wire.WorkerNetAddress;
  */
 @PublicApi
 // TODO(peis): Deprecate this and use BlockLocationPolicy in 2.0.
-public interface FileWriteLocationPolicy {
-  /**
-   * Gets the worker's host name for the next block to write to.
-   *
-   * @param workerInfoList the info of the active workers
-   * @param blockSizeBytes the size of the block in bytes
-   * @return the address of the worker to write to, null if no worker can be selected
-   */
-  WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList,
-      long blockSizeBytes, WorkerNetAddress.WorkerRole role);
+public interface FileWriteWithRoleLocationPolicy extends FileWriteLocationPolicy {
+  WorkerNetAddress getWorkerForNextBlock(GetWorkerOptions options);
 }

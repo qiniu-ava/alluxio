@@ -48,95 +48,96 @@ public class MetaCache {
     = CacheBuilder.newBuilder().maximumSize(maxCachedPaths).build(new BlockInfoLoader());
   private static List<WorkerInfo> workerList = new ArrayList<>();
   private static AtomicLong lastWorkerListAccess = new AtomicLong(System.currentTimeMillis());
-  private static boolean attr_cache_enabled = true;
-  private static boolean block_cache_enabled = true;
-  private static boolean worker_cache_enabled = true;
+  private static boolean attrCacheEnabled = true;
+  private static boolean blockCacheEnabled = true;
+  private static boolean workerCacheEnabled = true;
 
   public static void setAlluxioRootPath(Path path) {
     alluxioRootPath = path;
   }
 
-  public static void debug_meta_cache(String p) {
+  public static void debugMetaCache(String p) {
     if (p.startsWith("a0")) {
-      MetaCache.set_attr_cache(0);
+      MetaCache.setAttrCache(0);
       System.out.println("Alluxio attr cache disabled.");
     } else if (p.startsWith("a1")) {
-      MetaCache.set_attr_cache(1);
+      MetaCache.setAttrCache(1);
       System.out.println("Alluxio attr cache enabled.");
     } else if (p.startsWith("ap")) {
-      MetaCache.set_attr_cache(2);
+      MetaCache.setAttrCache(2);
       System.out.println("Alluxio attr cache purged.");
     } else if (p.startsWith("as")) {
-      System.out.println("Alluxio attr cache state:" + attr_cache_enabled);
+      System.out.println("Alluxio attr cache state:" + attrCacheEnabled);
       System.out.println("Alluxio attr cache size:" + fcache.size());
     } else if (p.startsWith("ac")) {
       p = p.substring(2);
       System.out.println("Attr cache for " + p + ":" + MetaCache.getStatus(MetaCache.resolve(p)));
     } else if (p.startsWith("b0")) {
-      MetaCache.set_block_cache(0);
+      MetaCache.setBlockCache(0);
       System.out.println("Alluxio block cache disabled.");
     } else if (p.startsWith("b1")) {
-      MetaCache.set_block_cache(1);
+      MetaCache.setBlockCache(1);
       System.out.println("Alluxio block cache enabled.");
     } else if (p.startsWith("bp")) {
-      MetaCache.set_block_cache(2);
+      MetaCache.setBlockCache(2);
       System.out.println("Alluxio block cache purged.");
     } else if (p.startsWith("bs")) {
-      System.out.println("Alluxio block cache state:" + block_cache_enabled);
+      System.out.println("Alluxio block cache state:" + blockCacheEnabled);
       System.out.println("Alluxio block cache size:" + bcache.size());
     } else if (p.startsWith("bc")) {
       p = p.substring(2);
       Long l = Long.parseLong(p);
       System.out.println("Cached block for " + l + ":" + MetaCache.getBlockInfoCache(l));
     } else if (p.startsWith("w0")) {
-      MetaCache.set_worker_cache(0);
+      MetaCache.setWorkerCache(0);
       System.out.println("Alluxio worker cache disabled.");
     } else if (p.startsWith("w1")) {
-      MetaCache.set_worker_cache(1);
+      MetaCache.setWorkerCache(1);
       System.out.println("Alluxio worker cache enabled.");
     } else if (p.startsWith("wp")) {
-      MetaCache.set_worker_cache(2);
+      MetaCache.setWorkerCache(2);
       System.out.println("Alluxio worker cache purged.");
     } else if (p.startsWith("ws")) {
-      System.out.println("Cached workers state:" + worker_cache_enabled);
+      System.out.println("Cached workers state:" + workerCacheEnabled);
       System.out.println("Cached workers:" + MetaCache.getWorkerInfoList());
     }
   }
 
-  public static void set_attr_cache(int v) {
+  public static void setAttrCache(int v) {
     switch (v) {
       case 0: 
-        attr_cache_enabled = false; 
+        attrCacheEnabled = false; 
         fcache.invalidateAll();
         return;
       case 1: 
-        attr_cache_enabled = true; 
+        attrCacheEnabled = true; 
         return;
       default: 
         fcache.invalidateAll(); 
     }
   }
-  public static void set_block_cache(int v) {
+
+  public static void setBlockCache(int v) {
     switch (v) {
       case 0: 
-        block_cache_enabled = false;
+        blockCacheEnabled = false;
         bcache.invalidateAll();
         return;
       case 1:
-        block_cache_enabled = true;
+        blockCacheEnabled = true;
         return;
       default:
         bcache.invalidateAll();
     }
-
   }
-  public static void set_worker_cache(int v) {
-    worker_cache_enabled = (0 == v) ? false : true;
+
+  public static void setWorkerCache(int v) {
+    workerCacheEnabled = (0 == v) ? false : true;
     if (v > 1) MetaCache.invalidateWorkerInfoList();
   }
 
   public static void setWorkerInfoList(List<WorkerInfo> list) {
-    if (!worker_cache_enabled) return;
+    if (!workerCacheEnabled) return;
 
     if (list != null) {
       synchronized (workerList) {
@@ -179,7 +180,7 @@ public class MetaCache {
   }
 
   public static void setStatus(String path, URIStatus s) {
-    /*if (!attr_cache_enabled || s.isFolder() || s.getBlockSizeBytes() == 0
+    /* if (!attrCacheEnabled || s.isFolder() || s.getBlockSizeBytes() == 0
         || s.getLength() == 0 || s.getInAlluxioPercentage() != 100) return; */
 
     path = resolve(path);
@@ -244,7 +245,7 @@ public class MetaCache {
   }
 
   public static void addBlockInfoCache(long blockId, BlockInfo info) {
-    if (!block_cache_enabled) return;
+    if (!blockCacheEnabled) return;
 
     BlockInfoData data = bcache.getUnchecked(blockId);
     if (data != null) data.setBlockInfo(info);

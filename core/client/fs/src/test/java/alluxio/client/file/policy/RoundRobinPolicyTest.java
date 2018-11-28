@@ -43,8 +43,8 @@ public final class RoundRobinPolicyTest {
     RoundRobinPolicy policy = new RoundRobinPolicy();
 
     Assert.assertNotEquals(
-        policy.getWorkerForNextBlock(workerInfoList, 2 * (long) Constants.GB).getHost(),
-        policy.getWorkerForNextBlock(workerInfoList, 2 * (long) Constants.GB).getHost());
+        policy.getWorkerForNextBlock(workerInfoList, 2 * (long) Constants.GB, WorkerNetAddress.WorkerRole.ALL).getHost(),
+        policy.getWorkerForNextBlock(workerInfoList, 2 * (long) Constants.GB, WorkerNetAddress.WorkerRole.ALL).getHost());
   }
 
   @Test

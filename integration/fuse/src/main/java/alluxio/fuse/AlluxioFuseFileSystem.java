@@ -781,7 +781,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
             doRefresh(path, turi);
             options.setLoadMetadataType(LoadMetadataType.Always);
           } else {
-            MetaCache.debug_meta_cache(dbg_txt);
+            MetaCache.debugMetaCache(dbg_txt);
           }
       }
 
