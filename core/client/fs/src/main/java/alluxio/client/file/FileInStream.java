@@ -372,6 +372,8 @@ public class FileInStream extends InputStream implements BoundedStream, Position
 
     //qiniu2 - block may be evicted or wrong
     MetaCache.invalidateBlockInfoCache(stream.getId());
+    MetaCache.invalidate(mStatus.getPath());
+    MetaCache.invalidateWorkerInfoList();
 
     try {
       stream.close();
