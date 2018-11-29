@@ -190,6 +190,23 @@ public class MetaCache {
     }
   }
 
+  public static String getLocalBlockPath(String path) {
+    path = resolve(path);
+    MetaCacheData c = fcache.getIfPresent(path);
+    return (c != null) ? c.getLocalBlockPath() : null;
+  }
+
+  public static void setLocalBlockPath(String path, String localPath) {
+    path = resolve(path);
+    if (localPath == null && fcache.getIfPresent(path) == null) {
+      return;
+    }
+    MetaCacheData c = fcache.getUnchecked(path);
+    if (c != null) {
+      c.setLocalBlockPath(localPath);
+    }
+  }
+
   public static AlluxioURI getURI(String path) {
     path = resolve(path);
     MetaCacheData c = fcache.getUnchecked(path); //confirm to original code logic
@@ -246,6 +263,7 @@ public class MetaCache {
   static class MetaCacheData {
     private URIStatus uriStatus;
     private AlluxioURI uri;
+    private String mLocalBlockPath;
 
     public MetaCacheData(String path) {
       /*
@@ -257,6 +275,7 @@ public class MetaCache {
          }*/
       this.uri = new AlluxioURI(path);
       this.uriStatus = null;
+      this.mLocalBlockPath = null;
     }
 
     public URIStatus getStatus() {
@@ -269,6 +288,14 @@ public class MetaCache {
 
     public AlluxioURI getURI() {
       return this.uri;
+    }
+
+    public String getLocalBlockPath() {
+      return mLocalBlockPath;
+    }
+    
+    public void setLocalBlockPath(String path) {
+      mLocalBlockPath = path;
     }
   }
 

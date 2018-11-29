@@ -95,7 +95,7 @@ public class BaseFileSystem implements FileSystem {
 
   @Override
   public void releaseShortCircuitInfo(FileSystem.ShortCircuitInfo info) {
-    if (info.worker() == null || info.file().equals("null")) {
+    if (info.worker() == null) {
       return;
     }
     Channel channel = null;
@@ -149,8 +149,8 @@ public class BaseFileSystem implements FileSystem {
             && mLocalTier.topTiersMatch(nearest.get())) {
         info.worker(locations.stream().map(BlockLocation::getWorkerAddress)
           .filter(addr -> addr.getTieredIdentity().equals(nearest.get())).findFirst().get());
-        LOG.debug("!!! worker {}", info.worker());
         channel = mFileSystemContext.acquireNettyChannel(info.worker());
+        LOG.debug("!!! worker {} channel {}", info.worker(), channel);
         Protocol.LocalBlockOpenRequest request =
           Protocol.LocalBlockOpenRequest.newBuilder().setBlockId(info.id()).build();
         ProtoMessage message = NettyRPC
@@ -161,7 +161,7 @@ public class BaseFileSystem implements FileSystem {
         LOG.debug("!!! local path {} for {}", info.file(), file);
       }
     } catch (Exception e) { 
-      LOG.error("!!! " + e.getMessage());
+      LOG.error("!!! channel {}: {}", channel,  e.getMessage());
     } finally {
       if (info.worker() != null && channel != null) {
         mFileSystemContext.releaseNettyChannel(info.worker(), channel);
