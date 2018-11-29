@@ -48,6 +48,7 @@ import ru.serce.jnrfuse.struct.Timespec;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -363,7 +364,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   }
 
   private int getattr_sc(String path, FileStat stat) {
-
     final long ctime_sec = System.currentTimeMillis() / 1000;
     final long ctime_nsec = (ctime_sec  % 1000) * 1000;
 
@@ -372,7 +372,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     stat.st_mtim.tv_sec.set(ctime_sec);
     stat.st_mtim.tv_nsec.set(ctime_nsec);
 
-    stat.st_size.set(512);
+    stat.st_size.set(FileSystem.ShortCircuitInfo.SIZE);
     stat.st_uid.set(UID);
     stat.st_gid.set(GID);
     stat.st_mode.set(FileStat.S_IFREG);
@@ -581,6 +581,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   private boolean handleRetryableException(String path, long fd, IOException e) {
       MetaCache.invalidate(path);
+      MetaCache.invalidateWorkerInfoList();
       if (!(e instanceof NotFoundException)) return false;
       OpenFileEntry oe = get_ofe(path, fd);
       if (oe == null) return false;
@@ -594,15 +595,28 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   }
 
   private int read_sc(String path, Pointer buf, @size_t long size, @off_t long offset, FuseFileInfo fi) {
-    FileSystem.ShortCircuitInfo info = mFileSystem.acquireShortCircuitInfo(
-        path.substring(0, path.length() - mSeed.length()));
-    synchronized(mSCFiles) {
-      mSCFiles.put(fi.fh.get(), info);
+    path = path.substring(0, path.length() - mSeed.length()); 
+    String localPath = MetaCache.getLocalBlockPath(path);
+
+    if (localPath == null) {
+      FileSystem.ShortCircuitInfo info = mFileSystem.acquireShortCircuitInfo(path);
+      synchronized(mSCFiles) {
+        mSCFiles.put(fi.fh.get(), info);
+      }
+      localPath = info.file();
     }
-    LOG.debug("!!! sc local block: {} for {}", info.file(), path);
-    int nread = info.file().getBytes().length;  
-    buf.put(0, info.file().getBytes(), 0, nread);
-    return nread;
+    if (localPath == null) {
+      localPath = FileSystem.ShortCircuitInfo.NULL;
+    } else if (!Files.exists(Paths.get(localPath))) {
+      localPath = FileSystem.ShortCircuitInfo.NULL;
+      MetaCache.setLocalBlockPath(path, null);  // local block gone
+    }
+    LOG.debug("!!! sc local block: {} for {}", localPath, path);
+    localPath = localPath + System.getProperty("line.separator");
+    byte []dest = new byte[(int)FileSystem.ShortCircuitInfo.SIZE];
+    System.arraycopy(localPath.getBytes(), 0, dest, 0, localPath.length());
+    buf.put(0, dest, 0, dest.length);
+    return dest.length;
   }
 
   /**
@@ -625,7 +639,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     if (path.endsWith(mSeed)) {
       return read_sc(path, buf, size, offset, fi);
     }
-
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
@@ -812,7 +825,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     synchronized(mSCFiles) {
       info = mSCFiles.remove(fi.fh.get());
     }
-    if (info != null && info.worker() != null) {
+    if (info != null) { 
       mFileSystem.releaseShortCircuitInfo(info);
     }
     return 0;

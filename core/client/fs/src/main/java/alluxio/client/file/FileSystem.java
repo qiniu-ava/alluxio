@@ -59,6 +59,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @PublicApi
 public interface FileSystem {
   public class ShortCircuitInfo {
+    public static final long SIZE = 512;
+    public static final String NULL = "null";
     public WorkerNetAddress mWorker;
     public String mFile;
     public long mId;
@@ -91,7 +93,7 @@ public interface FileSystem {
     }
 
     public static ShortCircuitInfo dummy() {
-      return new ShortCircuitInfo(null, "null", 0);
+      return new ShortCircuitInfo(null, null, 0);
     }
   }
 
