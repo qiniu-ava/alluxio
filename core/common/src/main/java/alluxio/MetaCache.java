@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Set;
 import java.util.List;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -46,7 +47,7 @@ public class MetaCache {
   private static LoadingCache<Long, BlockInfoData> bcache 
     = CacheBuilder.newBuilder().maximumSize(maxCachedPaths).build(new BlockInfoLoader());
   private static List<WorkerInfo> workerList = new ArrayList<>();
-  private static long lastWorkerListAccess = 0;
+  private static AtomicLong lastWorkerListAccess = new AtomicLong(System.currentTimeMillis());
   private static boolean attr_cache_enabled = true;
   private static boolean block_cache_enabled = true;
   private static boolean worker_cache_enabled = true;
@@ -146,14 +147,16 @@ public class MetaCache {
   }
 
   public static List<WorkerInfo> getWorkerInfoList() {
-    long now = System.currentTimeMillis(); // expire every 10s
-    if (now - lastWorkerListAccess > 1000 * 300) {
+    long now = System.currentTimeMillis(); // expire every 1min
+    if (now - lastWorkerListAccess.get() > 1000 * 60) {
       synchronized (workerList) {
         workerList.clear();
       }
     }
-    lastWorkerListAccess = now;
-    return workerList;
+    lastWorkerListAccess.set(now);
+    synchronized (workerList) {
+      return new ArrayList<WorkerInfo>(workerList);
+    }
   }
 
   public static void invalidateWorkerInfoList() {
