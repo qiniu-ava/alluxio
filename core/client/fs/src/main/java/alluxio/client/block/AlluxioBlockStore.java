@@ -179,14 +179,12 @@ public final class AlluxioBlockStore {
    */
   public BlockInStream getInStream(long blockId, InStreamOptions options,
       Map<WorkerNetAddress, Long> failedWorkers) throws IOException {
-    LOG.info("get in stream, blockId: {}, options: {}", blockId, options);
     /*try (CloseableResource<BlockMasterClient> masterClientResource =
              mContext.acquireBlockMasterClientResource()) {
       info = masterClientResource.get().getBlockInfo(blockId);
     }*/
     BlockInfo info = getInfo(blockId);
     List<BlockLocation> locations = info.getLocations();
-    LOG.info("blockId in getInStream: {}, block info: {}", blockId, info);
 
     //qiniu
     Set<WorkerNetAddress> cachedWorkers = MetaCache.getWorkerInfoList().stream().map(WorkerInfo::getAddress).collect(toSet());
@@ -307,7 +305,6 @@ public final class AlluxioBlockStore {
    */
   public BlockOutStream getOutStream(long blockId, long blockSize, WorkerNetAddress address,
       OutStreamOptions options) throws IOException {
-    LOG.info("get out stream, blockId: {}, blockSize: {}, options: {}", blockId, blockSize, options);
     if (blockSize == -1) {
       /*
       try (CloseableResource<BlockMasterClient> blockMasterClientResource =
