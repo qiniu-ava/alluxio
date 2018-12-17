@@ -21,9 +21,6 @@ import alluxio.wire.WorkerNetAddress;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,7 +39,6 @@ import javax.annotation.concurrent.ThreadSafe;
 // TODO(peis): Move the BlockLocationPolicy implementation to alluxio.client.block.policy.
 @ThreadSafe
 public final class LocalFirstPolicy implements FileWriteWithRoleLocationPolicy, BlockLocationPolicy {
-  private static final Logger LOG = LoggerFactory.getLogger(LocalFirstPolicy.class);
   private final TieredIdentity mTieredIdentity;
 
   private static List<String> writerHosts = null;
@@ -103,13 +99,10 @@ public final class LocalFirstPolicy implements FileWriteWithRoleLocationPolicy, 
   @Nullable
   public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList, long blockSizeBytes, WorkerNetAddress.WorkerRole role) {
     List<BlockWorkerInfo> shuffledWorkers = Lists.newArrayList(workerInfoList);
-    LOG.info("shuffledWorkers in getWorkerForNextBlock: {}", shuffledWorkers);
     List<BlockWorkerInfo> candidateWorkers = shuffledWorkers.stream()
       .filter(w -> LocalFirstPolicy.workerFilter(w, role))
       .collect(Collectors.toList());
-    LOG.info("candidateWorkers in getWorkerForNextBlock: {}", candidateWorkers);
     WorkerNetAddress worker = getWorkerForNextBlockImpl(candidateWorkers, blockSizeBytes);
-    LOG.info("worker in getWorkerForNextBlock: {}", worker);
     if (worker != null) return worker;
     return getWorkerForNextBlockImpl(workerInfoList, blockSizeBytes);
   }

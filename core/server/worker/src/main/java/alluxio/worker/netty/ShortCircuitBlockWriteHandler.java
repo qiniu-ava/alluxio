@@ -64,14 +64,12 @@ class ShortCircuitBlockWriteHandler extends ChannelInboundHandlerAdapter {
 
   @Override
   public void channelRead(ChannelHandlerContext ctx, Object msg) {
-    LOG.info("msg class: {}", msg.getClass());
     if (!(msg instanceof RPCProtoMessage)) {
       ctx.fireChannelRead(msg);
       return;
     }
 
     ProtoMessage message = ((RPCProtoMessage) msg).getMessage();
-    LOG.warn("message: {}", message.toString());
     if (message.isLocalBlockCreateRequest()) {
       handleBlockCreateRequest(ctx, message.asLocalBlockCreateRequest());
     } else if (message.isLocalBlockCompleteRequest()) {
