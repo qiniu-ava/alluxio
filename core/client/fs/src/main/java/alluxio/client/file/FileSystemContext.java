@@ -13,6 +13,7 @@ package alluxio.client.file;
 
 import alluxio.Configuration;
 import alluxio.PropertyKey;
+import alluxio.MetaCache;
 import alluxio.client.block.BlockMasterClient;
 import alluxio.client.block.BlockMasterClientPool;
 import alluxio.client.metrics.ClientMasterSync;
@@ -52,6 +53,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -386,7 +390,7 @@ public final class FileSystemContext implements Closeable {
   }
 
   private void initializeLocalWorker() throws IOException {
-    List<WorkerNetAddress> addresses = getWorkerAddresses();
+    List<WorkerNetAddress> addresses = getWorkerAddresses(true, false);
     if (!addresses.isEmpty()) {
       if (addresses.get(0).getHost().equals(NetworkAddressUtils.getClientHostName())) {
         mLocalWorker = addresses.get(0);
@@ -399,9 +403,15 @@ public final class FileSystemContext implements Closeable {
    * @return if there are any local workers, the returned list will ONLY contain the local workers,
    *         otherwise a list of all remote workers will be returned
    */
-  private List<WorkerNetAddress> getWorkerAddresses() throws IOException {
-    List<WorkerInfo> infos;
+  public List<WorkerNetAddress> getWorkerAddresses(boolean force, boolean all) throws IOException {
+    if (!force) {
+      List<WorkerNetAddress> ls = MetaCache.getWorkerInfoList().stream().map(WorkerInfo::getAddress).collect(toList());
+      if (ls.size() > 0) {
+        return ls;
+      }
+    }
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
+    List<WorkerInfo> infos;
     try {
       infos = blockMasterClient.getWorkerInfoList();
     } finally {
@@ -410,6 +420,7 @@ public final class FileSystemContext implements Closeable {
     if (infos.isEmpty()) {
       throw new UnavailableException(ExceptionMessage.NO_WORKER_AVAILABLE.getMessage());
     }
+    MetaCache.setWorkerInfoList(infos);
 
     // Convert the worker infos into net addresses, if there are local addresses, only keep those
     List<WorkerNetAddress> workerNetAddresses = new ArrayList<>();
@@ -423,7 +434,9 @@ public final class FileSystemContext implements Closeable {
       workerNetAddresses.add(netAddress);
     }
 
-    return localWorkerNetAddresses.isEmpty() ? workerNetAddresses : localWorkerNetAddresses;
+    //return localWorkerNetAddresses.isEmpty() ? workerNetAddresses : localWorkerNetAddresses;
+    return all ? workerNetAddresses : 
+      (localWorkerNetAddresses.isEmpty() ? workerNetAddresses : localWorkerNetAddresses);
   }
 
   /**

@@ -75,6 +75,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.Collections;
+import java.util.Iterator;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -94,23 +97,61 @@ public class BaseFileSystem implements FileSystem {
       Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_TIMEOUT_MS);
 
   @Override
-  public void releaseShortCircuitInfo(FileSystem.ShortCircuitInfo info) {
-    if (info.worker() == null) {
-      return;
-    }
-    Channel channel = null;
-    Protocol.LocalBlockCloseRequest request =
-      Protocol.LocalBlockCloseRequest.newBuilder().setBlockId(info.id()).build();
+  public void startAsyncCache(String file) {
     try {
-      channel = mFileSystemContext.acquireNettyChannel(info.worker());
-      NettyRPC.call(NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS),
-          new ProtoMessage(request));
-    } catch (java.io.IOException e) {
-      LOG.error("!!! error closing netty channel for short circuit {}", e.getMessage());
-    } finally {
-      if (channel != null) {
-        mFileSystemContext.releaseNettyChannel(info.worker(), channel);
-      }
+      URIStatus status = getStatus(new AlluxioURI(file));
+      List<Long> ids = status.getBlockIds();
+      List<WorkerNetAddress> all = mFileSystemContext.getWorkerAddresses(false, true);
+      List<WorkerNetAddress> all_remote = all.stream().filter(w -> w.getWebPort() < 5000).collect(toList());
+      List<WorkerNetAddress> all_local = all.stream().filter(w -> w.getWebPort() >= 5000).collect(toList());
+      Iterator<Long> it = ids.iterator();
+      while (it.hasNext()) {
+        WorkerNetAddress tgt = null, src = null;
+        long id = it.next();
+        BlockInfo binfo = getBlockInfo(id);
+        List<BlockLocation> locations = binfo.getLocations();
+        List<WorkerNetAddress> workers = locations.stream().map(BlockLocation::getWorkerAddress).collect(toList());
+        Collections.shuffle(workers);
+        Collections.shuffle(all);
+        Collections.shuffle(all_remote);
+        Collections.shuffle(all_local);
+        if (mFileSystemContext.hasLocalWorker() && 1 == ids.size()) {
+          if (workers.isEmpty()) {                                      // 1: no any cache, fetch from UFS to local worker
+            src = tgt = mFileSystemContext.getLocalWorker();
+          } else if (!workers.contains(mFileSystemContext.getLocalWorker())) {
+            tgt = mFileSystemContext.getLocalWorker();                  // 2: remote worker --> local worker
+            src = workers.get(0);
+          }
+        } else {
+          if (workers.isEmpty()) {                                      // 3: no any cache, remote worker or any local worker
+            src = tgt = all_remote.isEmpty() ? all_local.get(0) : all_remote.get(0);
+          } else {
+            List<WorkerNetAddress> workers_remote = workers.stream().filter(w -> w.getWebPort() < 5000).collect(toList());
+            if (workers_remote.isEmpty() && !all_remote.isEmpty()) {    // 4: all local worker --> one remote worker
+              tgt = all_remote.get(0);
+              src = workers.get(0);
+            }
+          }
+        }
+        if (tgt != null && src != null) {   // Construct the async cache request
+          Protocol.AsyncCacheRequest request =
+            Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(binfo.getLength())
+            .setOpenUfsBlockOptions(OpenFileOptions.defaults().toInStreamOptions(status).getOpenUfsBlockOptions(id))
+            .setSourceHost(src.getHost()).setSourcePort(src.getDataPort()).build();
+          LOG.info("!!! sc send asyn cache request for id {} to {} from {}", id, tgt, src);
+          MetaCache.invalidate(file);       // try to update block locations
+          Channel channel = mFileSystemContext.acquireNettyChannel(tgt);
+          try {
+            NettyRPCContext rpcContext =
+              NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS);
+            NettyRPC.fireAndForget(rpcContext, new ProtoMessage(request));
+          } finally {
+            mFileSystemContext.releaseNettyChannel(tgt, channel);
+          }
+        } // if
+      } // while
+    } catch (Exception e) { 
+      LOG.error("!!! asyn cache error {}", e.getMessage());
     }
   }
 
@@ -126,24 +167,15 @@ public class BaseFileSystem implements FileSystem {
         return info;
       }
       List<Long> ids = status.getBlockIds();
-      if (ids == null || ids.size() != 1) {
-        LOG.info("!!! invalid ids {}", ids);
+      if (ids.size() != 1) {
+        LOG.info("!!! need single ids but {}", ids);
         return info;
       }
       info.id(ids.get(0));
       BlockInfo binfo = getBlockInfo(info.id());
-      if (binfo == null) {
-        LOG.info("!!! invalid info {}", binfo);
-        return info;
-      }
       List<BlockLocation> locations = binfo.getLocations();
-      if (locations == null) {
-        LOG.warn("!!! fifo invalid locations {}", file);
-        return info;
-      }
-      List<TieredIdentity> tieredLocations =
-        locations.stream().map(location -> location.getWorkerAddress().getTieredIdentity())
-        .collect(toList());
+      List<TieredIdentity> tieredLocations = locations.stream().map(location -> 
+          location.getWorkerAddress().getTieredIdentity()).collect(toList());
       Optional<TieredIdentity> nearest = mLocalTier.nearest(tieredLocations);
       if (nearest.isPresent() && mLocalTier.getTier(0).getTierName().equals(Constants.LOCALITY_NODE)
             && mLocalTier.topTiersMatch(nearest.get())) {
@@ -151,8 +183,9 @@ public class BaseFileSystem implements FileSystem {
           .filter(addr -> addr.getTieredIdentity().equals(nearest.get())).findFirst().get());
         channel = mFileSystemContext.acquireNettyChannel(info.worker());
         LOG.debug("!!! worker {} channel {}", info.worker(), channel);
-        Protocol.LocalBlockOpenRequest request =
-          Protocol.LocalBlockOpenRequest.newBuilder().setBlockId(info.id()).build();
+        // wired, AsyncCacheRequest with LocalBlockOpenResponse -- qiniu
+        Protocol.AsyncCacheRequest request =
+          Protocol.AsyncCacheRequest.newBuilder().setBlockId(info.id()).setLength(-1).build();
         ProtoMessage message = NettyRPC
           .call(NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS),
               new ProtoMessage(request));
@@ -178,7 +211,7 @@ public class BaseFileSystem implements FileSystem {
     try (CloseableResource<BlockMasterClient> masterClientResource =
         mFileSystemContext.acquireBlockMasterClientResource()) {
       info = masterClientResource.get().getBlockInfo(blockId);
-      if (info != null) MetaCache.addBlockInfoCache(blockId, info);
+      MetaCache.addBlockInfoCache(blockId, info);
       return info;
     }
   }

@@ -147,7 +147,9 @@ public final class AlluxioBlockStore {
 
     try (CloseableResource<BlockMasterClient> masterClientResource =
         mContext.acquireBlockMasterClientResource()) {
-      return masterClientResource.get().getWorkerInfoList().stream()
+      List<WorkerInfo> ls = masterClientResource.get().getWorkerInfoList();
+      MetaCache.setWorkerInfoList(ls);
+      return ls.stream()
           .map(w -> new BlockWorkerInfo(w.getAddress(), w.getCapacityBytes(), w.getUsedBytes()))
           .collect(toList());
     }

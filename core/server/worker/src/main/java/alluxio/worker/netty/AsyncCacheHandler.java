@@ -14,6 +14,7 @@ package alluxio.worker.netty;
 import alluxio.network.protocol.RPCProtoMessage;
 import alluxio.proto.dataserver.Protocol;
 import alluxio.worker.block.AsyncCacheRequestManager;
+import alluxio.util.proto.ProtoMessage;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -39,6 +40,12 @@ public class AsyncCacheHandler extends ChannelInboundHandlerAdapter {
         && ((RPCProtoMessage) object).getMessage().isAsyncCacheRequest()) {
       Protocol.AsyncCacheRequest request =
           ((RPCProtoMessage) object).getMessage().asAsyncCacheRequest();
+      if (request.getLength() < 0) {   // get block path only, avoid locking stuff
+        Protocol.LocalBlockOpenResponse response = Protocol.LocalBlockOpenResponse.newBuilder()
+          .setPath(mRequestManager.getBlockPath(request.getBlockId())).build();
+        ctx.writeAndFlush(new RPCProtoMessage(new ProtoMessage(response)));
+        return;
+      }
       mRequestManager.submitRequest(request);
       // Note that, because the client side of this RPC end point is fireAndForget, thus expecting
       // no response. No OK response will be returned here.
