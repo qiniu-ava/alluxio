@@ -98,8 +98,7 @@ public interface FileSystem {
   }
 
   public ShortCircuitInfo acquireShortCircuitInfo(String file);
-
-  public void releaseShortCircuitInfo(ShortCircuitInfo info);
+  public void startAsyncCache(String file);
 
   /**
    * Factory for {@link FileSystem}.

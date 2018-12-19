@@ -49,7 +49,7 @@ public class AsyncCacheRequestManager {
   private final ExecutorService mAsyncCacheExecutor;
   /** The block worker. */
   private final BlockWorker mBlockWorker;
-  private final ConcurrentHashMap<Long, Protocol.AsyncCacheRequest> mPendingRequests;
+  private ConcurrentHashMap<Long, Protocol.AsyncCacheRequest> mPendingRequests;
   private final String mLocalWorkerHostname;
 
   /**
@@ -63,6 +63,10 @@ public class AsyncCacheRequestManager {
     mLocalWorkerHostname = NetworkAddressUtils.getLocalHostName();
   }
 
+  public String getBlockPath(long blockId) throws Exception {
+    return mBlockWorker.getVolatileBlockMeta(blockId).getPath();
+  }
+
   /**
    * Handles a request to cache a block asynchronously. This is a non-blocking call.
    *
@@ -72,6 +76,10 @@ public class AsyncCacheRequestManager {
     ASYNC_CACHE_REQUESTS.inc();
     long blockId = request.getBlockId();
     long blockLength = request.getLength();
+    if (mPendingRequests.size() >= 50) {
+      LOG.info("!!! too many asyn cach requests pending");
+      return;
+    }
     if (mPendingRequests.putIfAbsent(blockId, request) != null) {
       // This block is already planned.
       ASYNC_CACHE_DUPLICATE_REQUESTS.inc();
@@ -115,6 +123,9 @@ public class AsyncCacheRequestManager {
             ASYNC_CACHE_FAILED_BLOCKS.inc();
           }
           mPendingRequests.remove(blockId);
+          if (mPendingRequests.size() == 0) {
+            mPendingRequests = new ConcurrentHashMap<>();
+          }
         }
       });
     } catch (Exception e) {
@@ -124,6 +135,9 @@ public class AsyncCacheRequestManager {
       LOG.warn("Failed to submit async cache request {}: {}", request, e.getMessage());
       ASYNC_CACHE_FAILED_BLOCKS.inc();
       mPendingRequests.remove(blockId);
+      if (mPendingRequests.size() == 0) {
+        mPendingRequests = new ConcurrentHashMap<>();
+      }
     }
   }
 

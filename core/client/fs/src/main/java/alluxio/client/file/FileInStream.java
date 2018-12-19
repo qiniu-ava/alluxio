@@ -349,6 +349,7 @@ public class FileInStream extends InputStream implements BoundedStream, Position
                   .setOpenUfsBlockOptions(mOptions.getOpenUfsBlockOptions(blockId))
                   .setSourceHost(dataSource.getHost()).setSourcePort(dataSource.getDataPort())
                   .build();
+          MetaCache.invalidate(mStatus.getPath());
           Channel channel = mContext.acquireNettyChannel(worker);
           try {
             NettyRPCContext rpcContext =

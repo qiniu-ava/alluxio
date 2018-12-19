@@ -83,6 +83,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   private final boolean mIsShellGroupMapping;
 
   private static final String mSeed = ".tmp.ava.alluxiosc.tmp";
+  private static final String mCacheSeed = ".tmp.cache.tmp.ava.alluxiosc.tmp";
   private final Map<Long, FileSystem.ShortCircuitInfo> mSCFiles;
 
   private final FileSystem mFileSystem;
@@ -376,6 +377,11 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     stat.st_uid.set(UID);
     stat.st_gid.set(GID);
     stat.st_mode.set(FileStat.S_IFREG);
+
+    if (path.endsWith(mCacheSeed)) {
+      path = path.substring(0, path.length() - mCacheSeed.length()); 
+      mFileSystem.startAsyncCache(path);
+    }
 
     return 0;
   }
@@ -824,9 +830,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     FileSystem.ShortCircuitInfo info = null;
     synchronized(mSCFiles) {
       info = mSCFiles.remove(fi.fh.get());
-    }
-    if (info != null) { 
-      mFileSystem.releaseShortCircuitInfo(info);
     }
     return 0;
   }
