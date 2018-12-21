@@ -76,7 +76,7 @@ public class AsyncCacheRequestManager {
     ASYNC_CACHE_REQUESTS.inc();
     long blockId = request.getBlockId();
     long blockLength = request.getLength();
-    if (mPendingRequests.size() >= 50) {
+    if (mPendingRequests.size() >= 200) {
       LOG.info("!!! too many asyn cach requests pending");
       return;
     }
