@@ -512,6 +512,13 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     mUnderFileSystemBlockStore.cleanupSession(sessionId);
   }
 
+  @Override
+  public void evictBlock(long blockId) {
+    if (hasBlockMeta(blockId)) {
+      mHeartbeatReporter.onEvictBlockByWorker(0, blockId);
+    }
+  }
+
   /**
    * This class contains some metrics related to the block worker.
    * This class is public because the metric names are referenced in

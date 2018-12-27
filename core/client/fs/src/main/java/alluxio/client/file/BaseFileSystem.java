@@ -101,107 +101,140 @@ public class BaseFileSystem implements FileSystem {
     try {
       URIStatus status = getStatus(new AlluxioURI(file));
       List<Long> ids = status.getBlockIds();
-      List<WorkerNetAddress> all = mFileSystemContext.getWorkerAddresses(false, true);
-      List<WorkerNetAddress> all_remote = all.stream().filter(w -> w.getWebPort() < 5000).collect(toList());
-      List<WorkerNetAddress> all_local = all.stream().filter(w -> w.getWebPort() >= 5000).collect(toList());
       Iterator<Long> it = ids.iterator();
       while (it.hasNext()) {
-        WorkerNetAddress tgt = null, src = null;
-        long id = it.next();
-        BlockInfo binfo = getBlockInfo(id);
-        List<BlockLocation> locations = binfo.getLocations();
-        List<WorkerNetAddress> workers = locations.stream().map(BlockLocation::getWorkerAddress).collect(toList());
-        Collections.shuffle(workers);
-        Collections.shuffle(all);
-        Collections.shuffle(all_remote);
-        Collections.shuffle(all_local);
-        if (mFileSystemContext.hasLocalWorker() && 1 == ids.size()) {
-          if (workers.isEmpty()) {                                      // 1: no any cache, fetch from UFS to local worker
-            src = tgt = mFileSystemContext.getLocalWorker();
-          } else if (!workers.contains(mFileSystemContext.getLocalWorker())) {
-            tgt = mFileSystemContext.getLocalWorker();                  // 2: remote worker --> local worker
-            src = workers.get(0);
-          }
-        } else {
-          if (workers.isEmpty()) {                                      // 3: no any cache, remote worker or any local worker
-            src = tgt = all_remote.isEmpty() ? all_local.get(0) : all_remote.get(0);
-          } else {
-            List<WorkerNetAddress> workers_remote = workers.stream().filter(w -> w.getWebPort() < 5000).collect(toList());
-            if (workers_remote.isEmpty() && !all_remote.isEmpty()) {    // 4: all local worker --> one remote worker
-              tgt = all_remote.get(0);
-              src = workers.get(0);
-            }
-          }
+        if (startBlockCache(MetaCache.ACTION_ASYNC_CACHE, it.next(), 
+          (mFileSystemContext.hasLocalWorker() && 1 == ids.size())
+            ? mFileSystemContext.getLocalWorker().getHost() : null, status)) {
+          MetaCache.setStatusExpectMore(file);  // expect more blocks to cache
         }
-        if (tgt != null && src != null) {   // Construct the async cache request
-          Protocol.AsyncCacheRequest request =
-            Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(binfo.getLength())
-            .setOpenUfsBlockOptions(OpenFileOptions.defaults().toInStreamOptions(status).getOpenUfsBlockOptions(id))
-            .setSourceHost(src.getHost()).setSourcePort(src.getDataPort()).build();
-          LOG.info("!!! sc send asyn cache request for id {} to {} from {}", id, tgt, src);
-          MetaCache.invalidate(file);       // try to update block locations
-          Channel channel = mFileSystemContext.acquireNettyChannel(tgt);
-          try {
-            NettyRPCContext rpcContext =
-              NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS);
-            NettyRPC.fireAndForget(rpcContext, new ProtoMessage(request));
-          } finally {
-            mFileSystemContext.releaseNettyChannel(tgt, channel);
-          }
-        } // if
-      } // while
+      }
     } catch (Exception e) { 
       LOG.error("!!! asyn cache error {}", e.getMessage());
     }
   }
 
+  /**
+   * @param action: see cache or purge
+   * @param id: block id
+   * @param worker: worker ip address
+   * @return true: send cache or purge command
+   * Note: use AsyncCacheRequest to do the dirty job
+   */
   @Override
-  public FileSystem.ShortCircuitInfo acquireShortCircuitInfo(String file) {
-    Channel channel = null;
-    FileSystem.ShortCircuitInfo info = FileSystem.ShortCircuitInfo.dummy();
-
+  public boolean startBlockCache(int action, long id, String worker, URIStatus status) {
+    boolean rc = false;
     try {
-      URIStatus status = getStatus(new AlluxioURI(file));
-      if (status.getLength() > status.getBlockSizeBytes()) {
-        LOG.info("!!! multiple blocks {}", file);
-        return info;
-      }
-      List<Long> ids = status.getBlockIds();
-      if (ids.size() != 1) {
-        LOG.info("!!! need single ids but {}", ids);
-        return info;
-      }
-      info.id(ids.get(0));
-      BlockInfo binfo = getBlockInfo(info.id());
+      MetaCache.invalidateBlockInfoCache(id);
+      BlockInfo binfo = getBlockInfo(id);
       List<BlockLocation> locations = binfo.getLocations();
-      List<TieredIdentity> tieredLocations = locations.stream().map(location -> 
-          location.getWorkerAddress().getTieredIdentity()).collect(toList());
-      Optional<TieredIdentity> nearest = mLocalTier.nearest(tieredLocations);
-      if (nearest.isPresent() && mLocalTier.getTier(0).getTierName().equals(Constants.LOCALITY_NODE)
-            && mLocalTier.topTiersMatch(nearest.get())) {
-        info.worker(locations.stream().map(BlockLocation::getWorkerAddress)
-          .filter(addr -> addr.getTieredIdentity().equals(nearest.get())).findFirst().get());
-        channel = mFileSystemContext.acquireNettyChannel(info.worker());
-        LOG.debug("!!! worker {} channel {}", info.worker(), channel);
-        // wired, AsyncCacheRequest with LocalBlockOpenResponse -- qiniu
-        Protocol.AsyncCacheRequest request =
-          Protocol.AsyncCacheRequest.newBuilder().setBlockId(info.id()).setLength(-1).build();
-        ProtoMessage message = NettyRPC
-          .call(NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS),
-              new ProtoMessage(request));
-        Preconditions.checkState(message.isLocalBlockOpenResponse());
-        info.file(message.asLocalBlockOpenResponse().getPath());
-        LOG.debug("!!! local path {} for {}", info.file(), file);
+      List<WorkerNetAddress> workers = locations.stream().map(BlockLocation::getWorkerAddress).collect(toList());
+      Collections.shuffle(workers);
+      List<WorkerNetAddress> workers_remote = workers.stream().
+        filter(w -> w.getWebPort() < MetaCache.LOCAL_WORKER_PORT_MIN).collect(toList());
+      List<WorkerNetAddress> all = mFileSystemContext.getWorkerAddresses(false, true);
+      Collections.shuffle(all);
+      List<WorkerNetAddress> all_remote = all.stream().
+        filter(w -> w.getWebPort() < MetaCache.LOCAL_WORKER_PORT_MIN).collect(toList());
+      WorkerNetAddress tgt = null, src = null;
+      List<WorkerNetAddress> out;
+      switch (action) {
+        case MetaCache.ACTION_X_CACHE_REMOTE_EXISTED:          // remove if "remote" existed
+          if (workers_remote.isEmpty()) {
+            break;
+          }
+          // FALL_THRU
+        case MetaCache.ACTION_X_CACHE:
+          out = (worker == null) ? workers : workers.stream().filter(w -> w.getHost().equals(worker)).collect(toList());
+          Iterator<WorkerNetAddress> it = out.iterator();
+          while (it.hasNext()) {
+            tgt = it.next();
+            Protocol.AsyncCacheRequest request =
+              Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(action).build();
+            LOG.info("!!! X block cache id {} on {}", id, tgt.getHost());
+            Channel channel = mFileSystemContext.acquireNettyChannel(tgt);
+            try {
+              NettyRPCContext rpcContext =
+                NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS);
+              NettyRPC.fireAndForget(rpcContext, new ProtoMessage(request));
+              rc = true;
+            } finally {
+              mFileSystemContext.releaseNettyChannel(tgt, channel);
+            }
+          }
+          break;
+        case MetaCache.ACTION_ASYNC_CACHE:
+          // if worker is not null, cache on worker, otherwise, on an remote worker
+          if (worker == null) {
+            if (workers_remote.isEmpty() && !all_remote.isEmpty()) {
+              tgt = all_remote.get(0);
+              src = workers.isEmpty() ? tgt : workers.get(0);
+            }
+          } else {
+            out = all.stream().filter(w -> w.getHost().equals(worker)).collect(toList());
+            if (!out.isEmpty() && !workers.containsAll(out)) {
+              tgt = out.get(0);
+              src = workers.isEmpty() ? tgt : workers.get(0);
+            }
+          }
+          LOG.debug("!!! block cache id {} on {} from {}", id, tgt, src);
+          if (tgt != null && src != null) {
+            Protocol.AsyncCacheRequest request =
+              Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(binfo.getLength())
+              .setOpenUfsBlockOptions(OpenFileOptions.defaults().toInStreamOptions(status).getOpenUfsBlockOptions(id))
+              .setSourceHost(src.getHost()).setSourcePort(src.getDataPort()).build();
+            LOG.info("!!! block cache id {} on {} from {}", id, tgt.getHost(), src.getHost());
+            Channel channel = mFileSystemContext.acquireNettyChannel(tgt);
+            try {
+              NettyRPCContext rpcContext =
+                NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS);
+              NettyRPC.fireAndForget(rpcContext, new ProtoMessage(request));
+              rc = true;
+            } finally {
+              mFileSystemContext.releaseNettyChannel(tgt, channel);
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (Exception e) {
+      LOG.error("!!! drain block cache error {}", e.getMessage());
+    }
+    return rc;
+  }
+
+  @Override
+  public String acquireShortCircuitPath(String file) {
+    String localPath = "null";
+    try {
+      URIStatus s = getStatus(new AlluxioURI(file));
+      List<Long> ids = s.getBlockIds();
+      if (s.getLength() > s.getBlockSizeBytes() || ids.size() != 1) {
+        return localPath;
+      }
+      List<WorkerNetAddress> local = Collections.EMPTY_LIST;
+      if (MetaCache.localBlockExisted(ids.get(0))) {
+        local = getBlockInfo(ids.get(0)).getLocations().stream().map(BlockLocation::getWorkerAddress)
+          .filter(w -> w.getHost().equals(mLocalTier.getTier(0).getValue())).collect(toList());
+        if (local.isEmpty()) {  // block there but meta data missed
+          MetaCache.invalidate(file);
+          s = getStatus(new AlluxioURI(file));
+          ids = s.getBlockIds();
+          if (s.getLength() > s.getBlockSizeBytes() || ids.size() != 1) {
+            return localPath;
+          }
+          local = getBlockInfo(ids.get(0)).getLocations().stream().map(BlockLocation::getWorkerAddress)
+            .filter(w -> w.getHost().equals(mLocalTier.getTier(0).getValue())).collect(toList());
+        }
+        if (!local.isEmpty()) {
+          localPath = MetaCache.localBlockPath(ids.get(0));
+        }
       }
     } catch (Exception e) { 
-      LOG.error("!!! channel {}: {}", channel,  e.getMessage());
-    } finally {
-      if (info.worker() != null && channel != null) {
-        mFileSystemContext.releaseNettyChannel(info.worker(), channel);
-      }
+      LOG.error("!!! sc: {}",  e.getMessage());
     }
-
-    return info;
+    return localPath;
   }
 
   public BlockInfo getBlockInfo(long blockId) throws IOException {

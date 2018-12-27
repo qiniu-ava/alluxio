@@ -213,7 +213,7 @@ public final class AlluxioBlockStore {
       Set<WorkerNetAddress> subPool = workerPool.stream()
         .filter(w -> blockWorkers.contains(w) || Objects.equals(w, localWorker) ||
             (!mWriteHosts.contains(w.getHost() + ":" + w.getDataPort())
-             && w.getWebPort() < 50000))
+             && w.getWebPort() < MetaCache.LOCAL_WORKER_PORT_MIN))
         .collect(toSet());
       if (!failedWorkers.keySet().containsAll(subPool)) workerPool = subPool;
     } else {

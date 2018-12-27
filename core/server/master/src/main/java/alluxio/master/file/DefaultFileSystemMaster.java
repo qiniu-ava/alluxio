@@ -3625,27 +3625,28 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
 
     // qiniu
     // EVICT -> PERSIST or FREE
-    Map<Long, PersistFile> m = DefaultBlockMaster.getEvictFileMap(DefaultBlockMaster.EVICT_EVICT, workerId);
-    Iterator<Map.Entry<Long, PersistFile>> it = m.entrySet().iterator();
-    while (it.hasNext()) {
-        PersistFile pf = it.next().getValue();
-        try {
-            // don't go thru journal
-            mAsyncPersistHandler.scheduleAsyncPersistence(new AlluxioURI(
-                  getFileInfo(pf.getFileId()).getPath()));
-        } catch (FileDoesNotExistException e) {
-            DefaultBlockMaster.addEvictFile(DefaultBlockMaster.EVICT_FREE, workerId, pf);
-            LOG.error("==== EVICT: block {} for {} not found; do free: {}", pf.getBlockIds(), pf.getFileId(), e.getMessage());
-            continue;
-        } catch (Exception e) {
-            //TODO free it?
-            LOG.error("==== EVICT: block {} for {} exception: {}", pf.getBlockIds(), pf.getFileId(), e.getMessage());
-            continue;
+    Set<Long> s = MetaCache.getEvictBlock(MetaCache.EVICT_EVICT, workerId);
+    for (Long id: s) {
+      try {
+        long fileId = IdUtils.createFileId(BlockId.getContainerId(id));
+        FileInfo info = getFileInfo(fileId);
+        if (info.isPersisted()) {
+          MetaCache.addEvictBlock(MetaCache.EVICT_FREE, workerId, id);
+        } else {
+          // don't go thru journal
+          mAsyncPersistHandler.scheduleAsyncPersistence(new AlluxioURI(info.getPath()));
         }
+      } catch (FileDoesNotExistException e) {
+        MetaCache.addEvictBlock(MetaCache.EVICT_FREE, workerId, id);
+        LOG.error("==== EVICT: block {} not found; do free: {}", id, e.getMessage());
+        continue;
+      } catch (Exception e) {
+        //TODO free it?
+        LOG.error("==== EVICT: block {} exception: {}", id, e.getMessage());
+        continue;
+      }
     }
-    m.clear();
-    Metrics.FILES_PERSISTING.inc(filesToPersist.size() + DefaultBlockMaster.getEvictFileCnt(
-                DefaultBlockMaster.EVICT_PERSIST, IdUtils.INVALID_WORKER_ID) - Metrics.FILES_PERSISTING.getCount());
+    s.clear();
 
     if (!filesToPersist.isEmpty()) {
       LOG.debug("Sent files {} to worker {} to persist", filesToPersist, workerId);
@@ -3918,8 +3919,6 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
         = MetricsSystem.counter(MasterMetrics.FILES_FREED);
     private static final Counter FILES_PERSISTED
         = MetricsSystem.counter(MasterMetrics.FILES_PERSISTED);
-    private static final Counter FILES_PERSISTING
-        = MetricsSystem.counter(MasterMetrics.FILES_PERSISTING);
     private static final Counter NEW_BLOCKS_GOT
         = MetricsSystem.counter(MasterMetrics.NEW_BLOCKS_GOT);
     private static final Counter PATHS_DELETED
