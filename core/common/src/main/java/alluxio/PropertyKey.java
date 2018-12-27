@@ -3125,6 +3125,13 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.WORKER)
           .build();
+  public static final PropertyKey WORKER_LOCAL_PATH =
+      new Builder(Name.WORKER_LOCAL_PATH)
+          .setDefaultValue("/tmp.non_existed/alluxioworker")
+          .setDescription("Local worker path.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.WORKER)
+          .build();
 
   /**
    * @param fullyQualifiedClassname a fully qualified classname
@@ -3699,6 +3706,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.jvm.monitor.sleep.interval";
     public static final String MASTER_JVM_MONITOR_ENABLED = "alluxio.master.jvm.monitor.enabled";
     public static final String WORKER_JVM_MONITOR_ENABLED = "alluxio.worker.jvm.monitor.enabled";
+
+    public static final String WORKER_LOCAL_PATH = "alluxio.worker.local.path";
 
     private Name() {} // prevent instantiation
   }

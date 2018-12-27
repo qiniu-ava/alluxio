@@ -404,23 +404,21 @@ public final class FileSystemContext implements Closeable {
    *         otherwise a list of all remote workers will be returned
    */
   public List<WorkerNetAddress> getWorkerAddresses(boolean force, boolean all) throws IOException {
-    if (!force) {
-      List<WorkerNetAddress> ls = MetaCache.getWorkerInfoList().stream().map(WorkerInfo::getAddress).collect(toList());
-      if (ls.size() > 0) {
-        return ls;
-      }
-    }
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
     List<WorkerInfo> infos;
     try {
-      infos = blockMasterClient.getWorkerInfoList();
+      if (force || MetaCache.getWorkerInfoList().isEmpty()) {
+        infos = blockMasterClient.getWorkerInfoList();
+        MetaCache.setWorkerInfoList(infos);
+      } else {
+        infos = MetaCache.getWorkerInfoList();
+      }
     } finally {
       mBlockMasterClientPool.release(blockMasterClient);
     }
     if (infos.isEmpty()) {
       throw new UnavailableException(ExceptionMessage.NO_WORKER_AVAILABLE.getMessage());
     }
-    MetaCache.setWorkerInfoList(infos);
 
     // Convert the worker infos into net addresses, if there are local addresses, only keep those
     List<WorkerNetAddress> workerNetAddresses = new ArrayList<>();

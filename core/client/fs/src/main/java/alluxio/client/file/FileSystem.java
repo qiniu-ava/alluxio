@@ -58,47 +58,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @PublicApi
 public interface FileSystem {
-  public class ShortCircuitInfo {
-    public static final long SIZE = 512;
-    public static final String NULL = "null";
-    public WorkerNetAddress mWorker;
-    public String mFile;
-    public long mId;
-
-    public ShortCircuitInfo(WorkerNetAddress worker, String file, long id) {
-      mWorker = worker;
-      mFile = file;
-      mId = id;
-    }
-
-    public WorkerNetAddress worker() {
-      return mWorker;
-    }
-    public void worker(WorkerNetAddress w) {
-      mWorker = w;
-    }
-
-    public String file() {
-      return mFile;
-    }
-    public void file(String f) {
-      mFile = f;
-    }
-
-    public long id() {
-      return mId;
-    }
-    public void id(long i) {
-      mId = i;
-    }
-
-    public static ShortCircuitInfo dummy() {
-      return new ShortCircuitInfo(null, null, 0);
-    }
-  }
-
-  public ShortCircuitInfo acquireShortCircuitInfo(String file);
+  public String acquireShortCircuitPath(String file);
   public void startAsyncCache(String file);
+  public boolean startBlockCache(int action, long id, String worker, URIStatus status);
 
   /**
    * Factory for {@link FileSystem}.

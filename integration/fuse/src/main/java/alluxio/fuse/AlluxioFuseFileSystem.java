@@ -84,7 +84,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
 
   private static final String mSeed = ".tmp.ava.alluxiosc.tmp";
   private static final String mCacheSeed = ".tmp.cache.tmp.ava.alluxiosc.tmp";
-  private final Map<Long, FileSystem.ShortCircuitInfo> mSCFiles;
+  private static final int SHORT_CIRCUIT_SIZE = 512;
 
   private final FileSystem mFileSystem;
   // base path within Alluxio namespace that is used for FUSE operations
@@ -181,7 +181,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     mOpenFiles = new HashMap<>();
     mCreateFiles = new HashMap<>();
     mTruncatePaths = new ConcurrentHashMap<>();
-    mSCFiles = new HashMap<>();
 
     //final int maxCachedPaths = Configuration.getInt(PropertyKey.FUSE_CACHED_PATHS_MAX);
     mIsShellGroupMapping = ShellBasedUnixGroupsMapping.class.getName()
@@ -373,7 +372,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     stat.st_mtim.tv_sec.set(ctime_sec);
     stat.st_mtim.tv_nsec.set(ctime_nsec);
 
-    stat.st_size.set(FileSystem.ShortCircuitInfo.SIZE);
+    stat.st_size.set(SHORT_CIRCUIT_SIZE);
     stat.st_uid.set(UID);
     stat.st_gid.set(GID);
     stat.st_mode.set(FileStat.S_IFREG);
@@ -509,9 +508,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
 
   private int open_sc(String path, FuseFileInfo fi) {
     long id = getNextId();
-    synchronized(mSCFiles) {
-      mSCFiles.put(id, FileSystem.ShortCircuitInfo.dummy());
-    }
     fi.fh.set(id);
     return 0;
   }
@@ -602,24 +598,10 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
 
   private int read_sc(String path, Pointer buf, @size_t long size, @off_t long offset, FuseFileInfo fi) {
     path = path.substring(0, path.length() - mSeed.length()); 
-    String localPath = MetaCache.getLocalBlockPath(path);
-
-    if (localPath == null) {
-      FileSystem.ShortCircuitInfo info = mFileSystem.acquireShortCircuitInfo(path);
-      synchronized(mSCFiles) {
-        mSCFiles.put(fi.fh.get(), info);
-      }
-      localPath = info.file();
-    }
-    if (localPath == null) {
-      localPath = FileSystem.ShortCircuitInfo.NULL;
-    } else if (!Files.exists(Paths.get(localPath))) {
-      localPath = FileSystem.ShortCircuitInfo.NULL;
-      MetaCache.setLocalBlockPath(path, null);  // local block gone
-    }
+    String localPath = mFileSystem.acquireShortCircuitPath(path);
     LOG.debug("!!! sc local block: {} for {}", localPath, path);
     localPath = localPath + System.getProperty("line.separator");
-    byte []dest = new byte[(int)FileSystem.ShortCircuitInfo.SIZE];
+    byte []dest = new byte[SHORT_CIRCUIT_SIZE];
     System.arraycopy(localPath.getBytes(), 0, dest, 0, localPath.length());
     buf.put(0, dest, 0, dest.length);
     return dest.length;
@@ -827,10 +809,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   }
 
   private int release_sc(String path, FuseFileInfo fi) {
-    FileSystem.ShortCircuitInfo info = null;
-    synchronized(mSCFiles) {
-      info = mSCFiles.remove(fi.fh.get());
-    }
     return 0;
   }
 

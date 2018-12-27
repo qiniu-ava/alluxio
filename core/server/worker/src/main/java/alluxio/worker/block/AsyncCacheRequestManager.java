@@ -24,6 +24,8 @@ import alluxio.util.io.BufferUtils;
 import alluxio.util.network.NetworkAddressUtils;
 import alluxio.worker.block.io.BlockReader;
 import alluxio.worker.block.io.BlockWriter;
+import alluxio.network.protocol.RPCProtoMessage;
+import alluxio.util.proto.ProtoMessage;
 
 import com.codahale.metrics.Counter;
 import org.slf4j.Logger;
@@ -35,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 import javax.annotation.concurrent.ThreadSafe;
+import io.netty.channel.ChannelHandlerContext;
 
 /**
  * Handles client requests to asynchronously cache blocks. Responsible for managing the local
@@ -72,10 +75,26 @@ public class AsyncCacheRequestManager {
    *
    * @param request the async cache request fields will be available
    */
-  public void submitRequest(Protocol.AsyncCacheRequest request) {
+  public void submitRequest(ChannelHandlerContext ctx, Protocol.AsyncCacheRequest request) throws Exception {
     ASYNC_CACHE_REQUESTS.inc();
     long blockId = request.getBlockId();
     long blockLength = request.getLength();
+    if (blockLength == 0) {
+      LOG.info("!!! try to purge {}", blockId);
+      mBlockWorker.evictBlock(blockId);
+      return;
+    } else if (blockLength == -1) {   // query block local path
+      String path = "null";
+      try {
+        path = getBlockPath(blockId);
+      } catch (Exception e) {
+        LOG.debug("!!! failed to get path for {}, exception: {}", blockId, e.getMessage());
+      }
+      Protocol.LocalBlockOpenResponse response = Protocol.LocalBlockOpenResponse.newBuilder()
+        .setPath(path).build();
+      ctx.writeAndFlush(new RPCProtoMessage(new ProtoMessage(response)));
+      return;
+    }
     if (mPendingRequests.size() >= 200) {
       LOG.info("!!! too many asyn cach requests pending");
       return;

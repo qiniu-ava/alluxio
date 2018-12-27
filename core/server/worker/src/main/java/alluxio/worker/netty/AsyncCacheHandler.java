@@ -40,13 +40,7 @@ public class AsyncCacheHandler extends ChannelInboundHandlerAdapter {
         && ((RPCProtoMessage) object).getMessage().isAsyncCacheRequest()) {
       Protocol.AsyncCacheRequest request =
           ((RPCProtoMessage) object).getMessage().asAsyncCacheRequest();
-      if (request.getLength() < 0) {   // get block path only, avoid locking stuff
-        Protocol.LocalBlockOpenResponse response = Protocol.LocalBlockOpenResponse.newBuilder()
-          .setPath(mRequestManager.getBlockPath(request.getBlockId())).build();
-        ctx.writeAndFlush(new RPCProtoMessage(new ProtoMessage(response)));
-        return;
-      }
-      mRequestManager.submitRequest(request);
+      mRequestManager.submitRequest(ctx, request);
       // Note that, because the client side of this RPC end point is fireAndForget, thus expecting
       // no response. No OK response will be returned here.
     } else {

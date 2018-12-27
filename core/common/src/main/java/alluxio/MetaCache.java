@@ -17,16 +17,24 @@ import alluxio.client.file.URIStatus;
 import alluxio.wire.BlockInfo;
 import alluxio.wire.FileBlockInfo;
 import alluxio.wire.WorkerInfo;
+import alluxio.wire.BlockLocation;
+import alluxio.collections.ConcurrentHashSet;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.List;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -51,6 +59,37 @@ public class MetaCache {
   private static boolean attrCacheEnabled = true;
   private static boolean blockCacheEnabled = true;
   private static boolean workerCacheEnabled = true;
+
+  public static final int LOCAL_WORKER_PORT_MIN = 50000;
+  public static final String WORKER_LOCAL_PATH = Configuration.get(PropertyKey.WORKER_LOCAL_PATH);
+
+  public static final int ACTION_ASYNC_CACHE = 0;
+  public static final int ACTION_X_CACHE = -1;
+  public static final int ACTION_X_CACHE_REMOTE_EXISTED = -2;
+
+  //qiniu worker -> array of files
+  final static public int EVICT_EVICT = 0;
+  final static public int EVICT_FREE = 1;
+  static private Map <Long, Set<Long> > mEvictEvict = new ConcurrentHashMap<>();
+  static private Map <Long, Set<Long> >mEvictFree = new ConcurrentHashMap<>();
+
+  // need to synchronized
+  static public Set<Long> getEvictBlock(int type, long worker) {
+      Map <Long, Set<Long> > m = (EVICT_EVICT == type) ? mEvictEvict : mEvictFree;
+      Set<Long> s = m.get(worker);
+      if (s == null) {
+          s = new ConcurrentHashSet<Long>();
+          m.put(worker, s);
+      }
+      return s;
+  }
+
+  // add a place-hold PersistFile first, add blocks later
+  static public boolean addEvictBlock(int type, long worker, long block) {
+      Set<Long> s = getEvictBlock(type, worker);
+      s.add(block);
+      return true;
+  }
 
   public static void setAlluxioRootPath(Path path) {
     alluxioRootPath = path;
@@ -176,7 +215,26 @@ public class MetaCache {
   public static URIStatus getStatus(String path) {
     path = resolve(path);
     MetaCacheData c = fcache.getIfPresent(path);
-    return (c != null) ? c.getStatus() : null;
+    return (c == null || c.getExpectMore() > System.currentTimeMillis()) ? null : c.getStatus();
+  }
+
+  public static void setStatusExpectMore(String path) {
+    path = resolve(path);
+    MetaCacheData c = fcache.getIfPresent(path);
+    if (c != null) {
+      c.setExpectMore(System.currentTimeMillis() + 5 * 60 * 1000);
+    }
+  }
+
+  private static boolean statusContain(URIStatus a, URIStatus b) {
+    Set<BlockLocation> seta = new HashSet<>(), setb = new HashSet<>();
+    for (FileBlockInfo f: a.getFileBlockInfos()) {
+      seta.addAll(f.getBlockInfo().getLocations());
+    }
+    for (FileBlockInfo f: b.getFileBlockInfos()) {
+      setb.addAll(f.getBlockInfo().getLocations());
+    }
+    return seta.containsAll(setb);
   }
 
   public static void setStatus(String path, URIStatus s) {
@@ -184,8 +242,14 @@ public class MetaCache {
         || s.getLength() == 0 || s.getInAlluxioPercentage() != 100) return; */
 
     path = resolve(path);
-    MetaCacheData c = fcache.getUnchecked(path);
-    if (c != null) c.setStatus(s);
+    MetaCacheData c = fcache.getIfPresent(path);
+    long more = (c != null && c.getExpectMore() > System.currentTimeMillis() 
+        && !statusContain(s, c.getStatus())) ? c.getExpectMore() : 0;
+    c = (c == null) ? fcache.getUnchecked(path) : c;
+    c.setStatus(s);
+    if (more > 0) {
+      c.setExpectMore(more);
+    }
     if (s.getLength() > 0) {
       for (FileBlockInfo f: s.getFileBlockInfos()) {
         BlockInfo b = f.getBlockInfo();
@@ -194,21 +258,16 @@ public class MetaCache {
     }
   }
 
-  public static String getLocalBlockPath(String path) {
-    path = resolve(path);
-    MetaCacheData c = fcache.getIfPresent(path);
-    return (c != null) ? c.getLocalBlockPath() : null;
+  private static int testLocalPath = -1;
+  public static boolean localBlockExisted(long id) throws Exception {
+    if (testLocalPath < 0) {
+      testLocalPath = Files.isDirectory(Paths.get(MetaCache.WORKER_LOCAL_PATH)) ? 1 : 0;
+    } 
+    return (testLocalPath == 0) ? false : Files.exists(Paths.get(MetaCache.WORKER_LOCAL_PATH + "/" + id));
   }
 
-  public static void setLocalBlockPath(String path, String localPath) {
-    path = resolve(path);
-    if (localPath == null && fcache.getIfPresent(path) == null) {
-      return;
-    }
-    MetaCacheData c = fcache.getUnchecked(path);
-    if (c != null) {
-      c.setLocalBlockPath(localPath);
-    }
+  public static String localBlockPath(long id) {
+    return MetaCache.WORKER_LOCAL_PATH + "/" + id;
   }
 
   public static AlluxioURI getURI(String path) {
@@ -267,7 +326,14 @@ public class MetaCache {
   static class MetaCacheData {
     private URIStatus uriStatus;
     private AlluxioURI uri;
-    private String mLocalBlockPath;
+    private long mExpectMore;
+
+    public void setExpectMore(long more) {
+      mExpectMore = more;
+    }
+    public long getExpectMore() {
+      return mExpectMore;
+    }
 
     public MetaCacheData(String path) {
       /*
@@ -279,7 +345,7 @@ public class MetaCache {
          }*/
       this.uri = new AlluxioURI(path);
       this.uriStatus = null;
-      this.mLocalBlockPath = null;
+      this.mExpectMore = 0;
     }
 
     public URIStatus getStatus() {
@@ -292,14 +358,6 @@ public class MetaCache {
 
     public AlluxioURI getURI() {
       return this.uri;
-    }
-
-    public String getLocalBlockPath() {
-      return mLocalBlockPath;
-    }
-    
-    public void setLocalBlockPath(String path) {
-      mLocalBlockPath = path;
     }
   }
 
