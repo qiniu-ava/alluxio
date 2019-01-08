@@ -197,9 +197,13 @@ public final class AlluxioBlockStore {
     // Initial target workers to read the block given the block locations.
     Set<WorkerNetAddress> workerPool;
     WorkerNetAddress localWorker = mContext.getLocalWorker();
+
     // Note that, it is possible that the blocks have been written as UFS blocks
-    if (options.getStatus().isPersisted()
-        || options.getStatus().getPersistenceState().equals("TO_BE_PERSISTED")) {
+
+    // TODO check why `|| options.getStatus().getPersistenceState().equals("TO_BE_PERSISTED")` is added
+    // if (options.getStatus().isPersisted()
+    //     || options.getStatus().getPersistenceState().equals("TO_BE_PERSISTED")) {
+    if (options.getStatus().isPersisted()) {
       blockWorkerInfo = getEligibleWorkers();
       workerPool = blockWorkerInfo
         .stream()
