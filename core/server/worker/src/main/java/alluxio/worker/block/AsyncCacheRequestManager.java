@@ -12,6 +12,7 @@
 package alluxio.worker.block;
 
 import alluxio.Constants;
+import alluxio.MetaCache;
 import alluxio.Sessions;
 import alluxio.StorageTierAssoc;
 import alluxio.WorkerStorageTierAssoc;
@@ -26,6 +27,15 @@ import alluxio.worker.block.io.BlockReader;
 import alluxio.worker.block.io.BlockWriter;
 import alluxio.network.protocol.RPCProtoMessage;
 import alluxio.util.proto.ProtoMessage;
+import alluxio.wire.FileInfo;
+import alluxio.util.IdUtils;
+import alluxio.master.block.BlockId;
+import alluxio.client.file.URIStatus;
+import alluxio.wire.FileBlockInfo;
+import alluxio.wire.BlockInfo;
+import alluxio.wire.BlockLocation;
+import alluxio.wire.WorkerNetAddress;
+import alluxio.client.file.options.OpenFileOptions;
 
 import com.codahale.metrics.Counter;
 import org.slf4j.Logger;
@@ -35,6 +45,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.Collections;
+import java.util.List;
+import static java.util.stream.Collectors.toList;
 
 import javax.annotation.concurrent.ThreadSafe;
 import io.netty.channel.ChannelHandlerContext;
@@ -70,38 +83,83 @@ public class AsyncCacheRequestManager {
     return mBlockWorker.getVolatileBlockMeta(blockId).getPath();
   }
 
-  /**
-   * Handles a request to cache a block asynchronously. This is a non-blocking call.
-   *
-   * @param request the async cache request fields will be available
-   */
-  public void submitRequest(ChannelHandlerContext ctx, Protocol.AsyncCacheRequest request) throws Exception {
-    ASYNC_CACHE_REQUESTS.inc();
-    long blockId = request.getBlockId();
-    long blockLength = request.getLength();
-    if (blockLength == 0) {
-      LOG.info("!!! try to purge {}", blockId);
-      mBlockWorker.evictBlock(blockId);
-      return;
-    } else if (blockLength == -1) {   // query block local path
-      String path = "null";
+  private Protocol.AsyncCacheRequest rebuildReq(long id) throws Exception {
+    long fileId = IdUtils.createFileId(BlockId.getContainerId(id));
+    URIStatus status = new URIStatus(mBlockWorker.getFileInfo(fileId));
+    List<BlockInfo> ls = status.getFileBlockInfos().stream().map(FileBlockInfo::getBlockInfo)
+      .filter(b -> b.getBlockId() == id).collect(toList());
+    if (ls.size() == 0) {
+      LOG.error("!!! block {} not found in file {}", id, status.getUfsPath());
+      return null;
+    }
+    BlockInfo binfo = ls.get(0);
+
+    List<WorkerNetAddress> workers = binfo.getLocations().stream().map(BlockLocation::getWorkerAddress).collect(toList());
+    Collections.shuffle(workers);
+    List<WorkerNetAddress> local = workers.stream().filter(w -> w.getHost().equals(mLocalWorkerHostname)).collect(toList());
+    if (local.size() > 0) {
+      LOG.debug("!!! block {} already cached", id);
+      return null;
+    }
+    return workers.size() > 0
+      ? Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(binfo.getLength())
+          .setOpenUfsBlockOptions(OpenFileOptions.defaults().toInStreamOptions(status).getOpenUfsBlockOptions(id))
+          .setSourceHost(workers.get(0).getHost()).setSourcePort(workers.get(0).getDataPort()).build()
+      : Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(binfo.getLength())
+          .setOpenUfsBlockOptions(OpenFileOptions.defaults().toInStreamOptions(status).getOpenUfsBlockOptions(id))
+          .setSourceHost(mLocalWorkerHostname).build();   // no port
+  }
+
+  private void submitSpecialRequest(ChannelHandlerContext ctx, Protocol.AsyncCacheRequest request) throws Exception {
+    if (request.getLength() == MetaCache.ACTION_ASYNC_CACHE) {
       try {
-        path = getBlockPath(blockId);
+        Protocol.AsyncCacheRequest newReq = rebuildReq(request.getBlockId());
+        if (newReq != null) {
+          submitRequest(ctx, newReq);
+        }
       } catch (Exception e) {
-        LOG.debug("!!! failed to get path for {}, exception: {}", blockId, e.getMessage());
+        LOG.error("!!! error trying to cache {}", request.getBlockId());
+      }
+      return;
+    } else if (request.getLength() == MetaCache.ACTION_X_CACHE) {
+      LOG.info("!!! try to purge {}", request.getBlockId());
+      mBlockWorker.evictBlock(request.getBlockId());
+      return;
+    } else if (request.getLength() == MetaCache.ACTION_BLOCK_PATH) {   // query block local path
+      String path = "null";   // "" for not cached yet, ^/ for path ready, else, exception
+      try {
+        path = getBlockPath(request.getBlockId());
+      } catch (Exception e) {
+        path = e.getMessage();
+        LOG.debug("!!! failed to get path for {}, exception: {}", request.getBlockId(), e.getMessage());
       }
       Protocol.LocalBlockOpenResponse response = Protocol.LocalBlockOpenResponse.newBuilder()
         .setPath(path).build();
       ctx.writeAndFlush(new RPCProtoMessage(new ProtoMessage(response)));
       return;
     }
-    if (mPendingRequests.size() >= 200) {
-      LOG.info("!!! too many asyn cach requests pending");
+  }
+
+  /**
+   * Handles a request to cache a block asynchronously. This is a non-blocking call.
+   *
+   * @param request the async cache request fields will be available
+   */
+  public void submitRequest(ChannelHandlerContext ctx, Protocol.AsyncCacheRequest request) throws Exception {
+    if (request.getLength() <=0 ) {
+      submitSpecialRequest(ctx, request);
       return;
     }
+    ASYNC_CACHE_REQUESTS.inc();
+    long blockId = request.getBlockId();
+    long blockLength = request.getLength();
     if (mPendingRequests.putIfAbsent(blockId, request) != null) {
       // This block is already planned.
       ASYNC_CACHE_DUPLICATE_REQUESTS.inc();
+      return;
+    }
+    if (mPendingRequests.size() >= 200) {
+      LOG.info("!!! too many asyn cach requests pending");
       return;
     }
     try {
