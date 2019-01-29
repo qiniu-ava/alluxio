@@ -160,7 +160,7 @@ public final class DefaultAsyncPersistHandler implements AsyncPersistHandler {
       list.add(entry.getKey());
     }
     Collections.sort(list);
-    String uniqueAddress = list.get((int)fileId % list.size());
+    String uniqueAddress = list.get((int)(fileId % list.size()));
     return workerAddressId.get(uniqueAddress);
   }
 
