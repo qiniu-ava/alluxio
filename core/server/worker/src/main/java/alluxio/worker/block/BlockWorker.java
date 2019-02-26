@@ -23,6 +23,7 @@ import alluxio.worker.Worker;
 import alluxio.worker.block.io.BlockReader;
 import alluxio.worker.block.io.BlockWriter;
 import alluxio.worker.block.meta.BlockMeta;
+import alluxio.client.file.URIStatus;
 
 import java.io.IOException;
 import java.util.Set;

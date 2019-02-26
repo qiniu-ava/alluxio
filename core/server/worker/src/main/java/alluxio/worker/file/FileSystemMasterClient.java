@@ -24,6 +24,10 @@ import alluxio.thrift.GetPinnedFileIdsTOptions;
 import alluxio.thrift.GetUfsInfoTOptions;
 import alluxio.thrift.UfsInfo;
 import alluxio.wire.FileInfo;
+import alluxio.client.file.URIStatus;
+import alluxio.AlluxioURI;
+import alluxio.client.file.options.GetStatusOptions;
+import alluxio.exception.status.AlluxioStatusException;
 
 import org.apache.thrift.TException;
 

@@ -65,7 +65,7 @@ public class MetaCache {
 
   public static final int ACTION_ASYNC_CACHE = 0;
   public static final int ACTION_X_CACHE = -1;
-  public static final int ACTION_X_CACHE_REMOTE_EXISTED = -2;
+  public static final int ACTION_BLOCK_PATH = -2;
 
   //qiniu worker -> array of files
   final static public int EVICT_EVICT = 0;

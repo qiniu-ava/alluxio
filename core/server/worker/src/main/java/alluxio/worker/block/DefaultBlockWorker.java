@@ -12,6 +12,8 @@
 package alluxio.worker.block;
 
 import alluxio.Configuration;
+import alluxio.AlluxioURI;
+import alluxio.client.file.URIStatus;
 import alluxio.Constants;
 import alluxio.PropertyKey;
 import alluxio.RuntimeConstants;
@@ -43,6 +45,7 @@ import alluxio.worker.block.io.BlockWriter;
 import alluxio.worker.block.meta.BlockMeta;
 import alluxio.worker.block.meta.TempBlockMeta;
 import alluxio.worker.file.FileSystemMasterClient;
+import alluxio.client.file.options.GetStatusOptions;
 
 import com.codahale.metrics.Gauge;
 import com.google.common.base.Function;

@@ -139,30 +139,6 @@ public class BaseFileSystem implements FileSystem {
       WorkerNetAddress tgt = null, src = null;
       List<WorkerNetAddress> out;
       switch (action) {
-        case MetaCache.ACTION_X_CACHE_REMOTE_EXISTED:          // remove if "remote" existed
-          if (workers_remote.isEmpty()) {
-            break;
-          }
-          // FALL_THRU
-        case MetaCache.ACTION_X_CACHE:
-          out = (worker == null) ? workers : workers.stream().filter(w -> w.getHost().equals(worker)).collect(toList());
-          Iterator<WorkerNetAddress> it = out.iterator();
-          while (it.hasNext()) {
-            tgt = it.next();
-            Protocol.AsyncCacheRequest request =
-              Protocol.AsyncCacheRequest.newBuilder().setBlockId(id).setLength(action).build();
-            LOG.info("!!! X block cache id {} on {}", id, tgt.getHost());
-            Channel channel = mFileSystemContext.acquireNettyChannel(tgt);
-            try {
-              NettyRPCContext rpcContext =
-                NettyRPCContext.defaults().setChannel(channel).setTimeout(READ_TIMEOUT_MS);
-              NettyRPC.fireAndForget(rpcContext, new ProtoMessage(request));
-              rc = true;
-            } finally {
-              mFileSystemContext.releaseNettyChannel(tgt, channel);
-            }
-          }
-          break;
         case MetaCache.ACTION_ASYNC_CACHE:
           // if worker is not null, cache on worker, otherwise, on an remote worker
           if (worker == null) {
