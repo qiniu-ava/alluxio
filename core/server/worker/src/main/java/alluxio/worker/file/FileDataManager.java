@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.channels.Channels;
@@ -51,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.Iterator;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -291,70 +293,70 @@ public final class FileDataManager {
         mUfsManager.get(fileInfo.getMountId()).acquireUfsResource()) {
       UnderFileSystem ufs = ufsResource.get();
       String dstPath = prepareUfsFilePath(fileInfo, ufs);
+      Map<Long, BlockInfo> blocks = getBlocks(fileId, blockIds); // qiniu PMW
+      List<Throwable> errors = new ArrayList<>();
+      if (ufs.getUnderFSType() == "kodo") {
+        long size = 0;
+        ArrayList<String> contexts = new ArrayList<>();
+        try {
+          for (long blockId : blockIds) {
+            BlockReader reader = getBlockReaderChannel(blockId, blockIdToLockId, blocks);
+            InputStream stream = Channels.newInputStream(reader.getChannel());
+            LOG.debug("persist block {}", blockId);
+            HashMap<Long, ArrayList<String>> uploadResult = ufs.create(stream, dstPath);
+            if (uploadResult == null || uploadResult.size() > 1) {
+              LOG.error("uploadResult length should be 1, but get result : {}", uploadResult);
+              stream.close();
+              reader.close();
+              throw new IOException("Stream upload result wrong");
+            }
+            Iterator<Map.Entry<Long,ArrayList<String>>> itr = uploadResult.entrySet().iterator();
+            while(itr.hasNext()){
+              Map.Entry<Long,ArrayList<String>> entry = itr.next();
+              size += entry.getKey();
+              contexts.addAll(entry.getValue());
+            }
+            stream.close();
+            reader.close();
+          }
+        } catch (BlockDoesNotExistException | InvalidWorkerStateException e) {
+          errors.add(e);
+        } finally {
+          handleIOException(blockIdToLockId, errors, fileId);
+        }
+
+        LOG.debug("make file with size: {}, dstpath: {}, contexts: {}", size, dstPath, contexts);
+        ufs.createFile(size, null, dstPath, new HashMap<String, Object>(), contexts);
+        LOG.info("=== Persit with stream uploader {}({}):{} ", fileInfo.getPath(), fileId, blockIds);
+        String ufsFingerprint = ufs.getFingerprint(dstPath);
+        synchronized (mLock) {
+          mPersistingInProgressFiles.remove(fileId);
+          mPersistedUfsFingerprints.put(fileId, ufsFingerprint);
+        }
+        return;
+      }
       OutputStream outputStream = ufs.create(dstPath, CreateOptions.defaults()
           .setOwner(fileInfo.getOwner()).setGroup(fileInfo.getGroup())
           .setMode(new Mode((short) fileInfo.getMode())));
       final WritableByteChannel outputChannel = Channels.newChannel(outputStream);
-      Map<Long, BlockInfo> blocks = getBlocks(fileId, blockIds); // qiniu PMW
-      List<Throwable> errors = new ArrayList<>();
       try {
         for (long blockId : blockIds) {
-          Long lockId = blockIdToLockId.get(blockId);
-
-          if (lockId != null && Configuration.getBoolean(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT_ENABLED)) {
-            BlockMeta blockMeta =
-              mBlockWorker.getBlockMeta(Sessions.CHECKPOINT_SESSION_ID, blockId, lockId);
-            mPersistenceRateLimiter.acquire((int) blockMeta.getBlockSize());
-          }
-
-          // obtain block reader
-          BlockInfo bInfo = blocks.get(blockId);
-          if ((lockId == null) && (bInfo == null || bInfo.getLocations() == null || bInfo.getLocations().size() == 0
-                || bInfo.getLocations().get(0).getWorkerAddress() == null
-                || bInfo.getLocations().get(0).getWorkerAddress().getHost() == null
-                || bInfo.getLocations().get(0).getWorkerAddress().getHost().equals(""))) {
-            throw new BlockDoesNotExistException("!!!=== block " + blockId + " does not exist. bInfo:" + bInfo);
-          }
-          BlockReader reader = (lockId ==  null)  // qiniu PMW
-            ? new RemoteBlockReader(blockId, bInfo.getLength(), 
-                new InetSocketAddress(
-                  bInfo.getLocations().get(0).getWorkerAddress().getHost(), 
-                  bInfo.getLocations().get(0).getWorkerAddress().getDataPort()),
-                Protocol.OpenUfsBlockOptions.getDefaultInstance())
-            : mBlockWorker.readBlockRemote(Sessions.CHECKPOINT_SESSION_ID, blockId, lockId);
-
+          BlockReader reader = getBlockReaderChannel(blockId, blockIdToLockId, blocks);
           // write content out
           ReadableByteChannel inputChannel = reader.getChannel();
           mChannelCopier.copy(inputChannel, outputChannel);
           reader.close();
-          LOG.debug("=== Persit {}({}):{} get {} reader {}:{}",
-              fileInfo.getPath(), fileId, blockId, (lockId == null) ? "remote" : "local",
-              bInfo.getLocations().size() == 0 ? "" : bInfo.getLocations().iterator().next().getWorkerAddress().getHost(), 
-              bInfo.getLocations().size() == 0 ? 0 : bInfo.getLocations().iterator().next().getWorkerAddress().getDataPort());
+          // LOG.debug("=== Persit {}({}):{} get {} reader {}:{}",
+          //     fileInfo.getPath(), fileId, blockId, (lockId == null) ? "remote" : "local",
+          //     bInfo.getLocations().size() == 0 ? "" : bInfo.getLocations().iterator().next().getWorkerAddress().getHost(), 
+          //     bInfo.getLocations().size() == 0 ? 0 : bInfo.getLocations().iterator().next().getWorkerAddress().getDataPort());
 
         }
         LOG.info("=== Persit {}({}):{} ", fileInfo.getPath(), fileId, blockIds);
       } catch (BlockDoesNotExistException | InvalidWorkerStateException e) {
         errors.add(e);
       } finally {
-        // make sure all the locks are released
-        for (long lockId : blockIdToLockId.values()) {
-          try {
-            mBlockWorker.unlockBlock(lockId);
-          } catch (BlockDoesNotExistException e) {
-            errors.add(e);
-          }
-        }
-
-        // Process any errors
-        if (!errors.isEmpty()) {
-          StringBuilder errorStr = new StringBuilder();
-          errorStr.append("the blocks of file").append(fileId).append(" are failed to persist\n");
-          for (Throwable e : errors) {
-            errorStr.append(e).append('\n');
-          }
-          throw new IOException(errorStr.toString());
-        }
+        handleIOException(blockIdToLockId, errors, fileId);
       }
 
       outputStream.flush();
@@ -365,6 +367,53 @@ public final class FileDataManager {
         mPersistingInProgressFiles.remove(fileId);
         mPersistedUfsFingerprints.put(fileId, ufsFingerprint);
       }
+    }
+  }
+
+  private BlockReader getBlockReaderChannel(long blockId, Map<Long, Long> blockIdToLockId, Map<Long, BlockInfo> blocks) 
+    throws BlockDoesNotExistException, InvalidWorkerStateException, IOException {
+    Long lockId = blockIdToLockId.get(blockId);
+    if (lockId != null && Configuration.getBoolean(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT_ENABLED)) {
+      BlockMeta blockMeta =
+        mBlockWorker.getBlockMeta(Sessions.CHECKPOINT_SESSION_ID, blockId, lockId);
+      mPersistenceRateLimiter.acquire((int) blockMeta.getBlockSize());
+    }
+
+    // obtain block reader
+    BlockInfo bInfo = blocks.get(blockId);
+    if ((lockId == null) && (bInfo == null || bInfo.getLocations() == null || bInfo.getLocations().size() == 0
+          || bInfo.getLocations().get(0).getWorkerAddress() == null
+          || bInfo.getLocations().get(0).getWorkerAddress().getHost() == null
+          || bInfo.getLocations().get(0).getWorkerAddress().getHost().equals(""))) {
+      throw new BlockDoesNotExistException("!!!=== block " + blockId + " does not exist. bInfo:" + bInfo);
+    }
+    BlockReader reader = (lockId ==  null)  // qiniu PMW
+      ? new RemoteBlockReader(blockId, bInfo.getLength(), 
+          new InetSocketAddress(
+            bInfo.getLocations().get(0).getWorkerAddress().getHost(), 
+            bInfo.getLocations().get(0).getWorkerAddress().getDataPort()),
+          Protocol.OpenUfsBlockOptions.getDefaultInstance())
+      : mBlockWorker.readBlockRemote(Sessions.CHECKPOINT_SESSION_ID, blockId, lockId);
+    return reader;
+  }
+
+  private void handleIOException(Map<Long, Long> blockIdToLockId, List<Throwable> errors, long fileId) throws IOException {
+    for (long lockId : blockIdToLockId.values()) {
+      try {
+        mBlockWorker.unlockBlock(lockId);
+      } catch (BlockDoesNotExistException e) {
+        errors.add(e);
+      }
+    }
+
+    // Process any errors
+    if (!errors.isEmpty()) {
+      StringBuilder errorStr = new StringBuilder();
+      errorStr.append("the blocks of file").append(fileId).append(" are failed to persist\n");
+      for (Throwable e : errors) {
+        errorStr.append(e).append('\n');
+      }
+      throw new IOException(errorStr.toString());
     }
   }
 

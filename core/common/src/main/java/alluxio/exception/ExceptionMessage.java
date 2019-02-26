@@ -142,6 +142,7 @@ public enum ExceptionMessage {
   FILE_ALREADY_EXISTS("{0} already exists"),
   FILE_CREATE_IS_DIRECTORY("{0} already exists. Directories cannot be overwritten with create"),
   PARENT_CREATION_FAILED("Unable to create parent directories for path {0}"),
+  File_CREATION_FAILED("Unable to create file for path {0}"),
 
   // file system master
   CANNOT_FREE_NON_EMPTY_DIR("Cannot free directory {0} which is not empty. Please set "

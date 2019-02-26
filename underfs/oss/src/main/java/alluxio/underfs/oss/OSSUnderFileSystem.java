@@ -38,6 +38,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.ArrayList;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -140,6 +143,14 @@ public class OSSUnderFileSystem extends ObjectUnderFileSystem {
   protected OutputStream createObject(String key) throws IOException {
     return new OSSOutputStream(mBucketName, key, mClient);
   }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> streamUploader(InputStream stream, String key) {
+    return null;
+  }
+
+  @Override
+  public void kodoCreateFile(long size, String mime, String key, Map<String, Object> map, ArrayList<String> contexts) {}
 
   @Override
   protected boolean deleteObject(String key) {

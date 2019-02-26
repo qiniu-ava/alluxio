@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.HashMap;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -65,6 +66,11 @@ public abstract class BaseUnderFileSystem implements UnderFileSystem {
   @Override
   public OutputStream create(String path) throws IOException {
     return create(path, CreateOptions.defaults().setCreateParent(true));
+  }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(InputStream stream, String path) throws IOException {
+    return create(stream, path, CreateOptions.defaults().setCreateParent(true));
   }
 
   @Override

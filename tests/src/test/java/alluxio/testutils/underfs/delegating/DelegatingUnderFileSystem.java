@@ -28,6 +28,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 /**
  * UFS which delegates to another UFS. Extend this class to override method behavior.
@@ -65,6 +67,21 @@ public class DelegatingUnderFileSystem implements UnderFileSystem {
   @Override
   public OutputStream create(String path, CreateOptions options) throws IOException {
     return mUfs.create(path, options);
+  }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(InputStream stream, String path, CreateOptions options) throws IOException {
+    return mUfs.create(stream, path, options);
+  }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(InputStream stream, String path) throws IOException {
+    return mUfs.create(stream, path);
+  }
+
+  @Override
+  public void createFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts) throws IOException {
+    mUfs.createFile(size, mime, path, map, contexts);
   }
 
   @Override

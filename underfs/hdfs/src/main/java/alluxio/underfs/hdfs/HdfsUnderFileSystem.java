@@ -58,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Stack;
 import java.util.concurrent.ExecutionException;
 
@@ -183,6 +184,15 @@ public class HdfsUnderFileSystem extends BaseUnderFileSystem
     }
     return new AtomicFileOutputStream(path, this, options);
   }
+
+  @Override
+  public HashMap<Long, ArrayList<String>> create(InputStream stream, String path, CreateOptions options) throws IOException {
+    return null;
+  }
+
+  @Override
+  public void createFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts) throws IOException {}
+
 
   @Override
   public OutputStream createDirect(String path, CreateOptions options) throws IOException {

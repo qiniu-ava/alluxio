@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -222,6 +223,12 @@ public interface UnderFileSystem extends Closeable {
    * @return A {@code OutputStream} object
    */
   OutputStream create(String path, CreateOptions options) throws IOException;
+
+  HashMap<Long, ArrayList<String>> create(InputStream stream, String path) throws IOException;
+
+  HashMap<Long, ArrayList<String>> create(InputStream stream, String path, CreateOptions options) throws IOException;
+
+  void createFile(long size, String mime, String path, Map<String, Object> map, ArrayList<String> contexts) throws IOException;
 
   /**
    * Deletes a directory from the under file system with the indicated name non-recursively. A
